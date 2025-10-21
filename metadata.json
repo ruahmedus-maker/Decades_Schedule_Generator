@@ -1,0 +1,5 @@
+{
+  "name": "Copy of AI Bartender Schedule Generator",
+  "description": "An intelligent scheduling application that generates a month-long schedule for bartenders using the detailed business logic from an existing Google Apps Script. It produces a balanced schedule that can be exported as a styled HTML report.",
+  "requestFramePermissions": []
+}
