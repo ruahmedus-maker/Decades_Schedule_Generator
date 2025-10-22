@@ -23,9 +23,9 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule }) => {
 
         const scheduleGrid: Record<string, Record<string, string[]>> = {};
         
-        // FIX: Explicitly type `a` and `b` as DayOfWeek to resolve type inference issues.
-        const daysInWeek = Array.from(new Set(weekSchedule.map(entry => entry.day)))
-                                 .sort((a: DayOfWeek, b: DayOfWeek) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
+        // FIX: Explicitly type `daysInWeek` to ensure `day` is correctly typed in subsequent maps.
+        const daysInWeek: DayOfWeek[] = Array.from(new Set(weekSchedule.map(entry => entry.day)))
+                                 .sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
 
         weekSchedule.forEach(entry => {
           const key = `${entry.floor} / ${entry.bar}`;

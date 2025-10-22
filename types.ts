@@ -23,6 +23,14 @@ export interface FixedAssignment {
     name: string;
 }
 
+export interface ClosedShift {
+  id: string;
+  week: `Week_${1|2|3|4}`;
+  day: DayOfWeek;
+  floor: string;
+  bar: string;
+}
+
 export interface ScheduleEntry {
   week: number;
   day: DayOfWeek;

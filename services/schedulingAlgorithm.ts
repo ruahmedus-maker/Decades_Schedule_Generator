@@ -1,4 +1,4 @@
-import type { Schedule, Bartender, Shift, FixedAssignment, TargetShifts, TimeOffRequest, DayOfWeek } from '../types';
+import type { Schedule, Bartender, Shift, FixedAssignment, TargetShifts, TimeOffRequest, DayOfWeek, ClosedShift } from '../types';
 
 const DAY_ORDER: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Sun_Night'];
 
@@ -69,25 +69,31 @@ export function generateSchedule(
     shiftsTemplate: Shift[],
     fixedAssignments: FixedAssignment[],
     targetShifts: TargetShifts,
-    timeOffRequests: TimeOffRequest[]
+    timeOffRequests: TimeOffRequest[],
+    closedShifts: ClosedShift[]
 ): Schedule {
   
   // 1. INITIALIZATION
   const schedule: Schedule = [];
   const shiftCounts: Record<string, number> = bartenders.reduce((acc, b) => ({ ...acc, [b.name]: 0 }), {});
   const timeOffMap = createTimeOffMap(timeOffRequests);
+  const closedShiftsSet = new Set(closedShifts.map(cs => `${cs.week}-${cs.day}-${cs.floor}-${cs.bar}`));
 
-  // 2. CREATE EMPTY SCHEDULE STRUCTURE
-  // Populate the schedule with all required shifts for all 4 weeks, but with empty bartender lists.
+
+  // 2. CREATE EMPTY SCHEDULE STRUCTURE based on template, excluding closed shifts
   for (let week = 1; week <= 4; week++) {
+    const weekString = `Week_${week}` as const;
     shiftsTemplate.forEach(shift => {
-      schedule.push({
-        week,
-        day: shift.day,
-        floor: shift.floor,
-        bar: shift.bar,
-        bartenders: [],
-      });
+      const shiftIdentifier = `${weekString}-${shift.day}-${shift.floor}-${shift.bar}`;
+      if (!closedShiftsSet.has(shiftIdentifier)) {
+          schedule.push({
+            week,
+            day: shift.day,
+            floor: shift.floor,
+            bar: shift.bar,
+            bartenders: [],
+          });
+      }
     });
   }
 
@@ -113,7 +119,9 @@ export function generateSchedule(
     }
     if (!shift.bartenders.includes(assignment.name)) {
         shift.bartenders.push(assignment.name);
-        shiftCounts[assignment.name]++;
+        if(shiftCounts[assignment.name] !== undefined) {
+          shiftCounts[assignment.name]++;
+        }
     }
   });
   
@@ -144,8 +152,8 @@ export function generateSchedule(
 
         // Sort candidates by who needs shifts the most to meet their target.
         availableCandidates.sort((a, b) => {
-            const needA = targetShifts[a.name] - shiftCounts[a.name];
-            const needB = targetShifts[b.name] - shiftCounts[b.name];
+            const needA = (targetShifts[a.name] || 0) - (shiftCounts[a.name] || 0);
+            const needB = (targetShifts[b.name] || 0) - (shiftCounts[b.name] || 0);
             if (needA !== needB) return needB - needA; // Higher need comes first
             return Math.random() - 0.5; // Randomize for fairness if need is equal
         });
@@ -180,9 +188,11 @@ export function generateSchedule(
         
         // Assign the chosen bartenders and update their counts for subsequent calculations.
         for (const bartender of toAssign) {
-          shift.bartenders.push(bartender.name);
-          shiftCounts[bartender.name]++;
-          scheduledThisDay.add(bartender.name);
+          if (bartender) {
+            shift.bartenders.push(bartender.name);
+            shiftCounts[bartender.name]++;
+            scheduledThisDay.add(bartender.name);
+          }
         }
       }
     }

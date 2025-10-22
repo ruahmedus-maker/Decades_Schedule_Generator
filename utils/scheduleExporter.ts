@@ -31,16 +31,14 @@ function calculateSummaryData(schedule: Schedule, bartenders: Bartender[], earni
     }).sort((a,b) => a.name.localeCompare(b.name));
 }
 
-function generateSummarySection(summaryData: SummaryData[], targetShifts: TargetShifts): string {
+function generateSummarySection(summaryData: SummaryData[]): string {
     let html = `<div class="section">
-        <h2 class="section-title">📊 Bartender Summary & Target Analysis</h2>
+        <h2 class="section-title">📊 Bartender Summary</h2>
         <table class="summary-table">
             <thead>
                 <tr>
                     <th>Bartender</th>
                     <th>Total Shifts</th>
-                    <th>Target</th>
-                    <th>Status</th>
                     <th>Total Earnings</th>
                     <th>Avg. Per Shift</th>
                 </tr>
@@ -49,16 +47,10 @@ function generateSummarySection(summaryData: SummaryData[], targetShifts: Target
 
     summaryData.forEach(data => {
         const { name, shiftCount, totalEarnings, averageEarnings } = data;
-        const target = targetShifts[name] || 0;
-        const onTrack = shiftCount >= target;
-        const statusClass = onTrack ? 'target-met' : 'target-missed';
-        const statusText = onTrack ? `✔ Met` : `❌ Needs ${Math.max(0, target - shiftCount)}`;
         html += `
             <tr>
                 <td>${name}</td>
                 <td>${shiftCount}</td>
-                <td>${target}</td>
-                <td class="${statusClass}">${statusText}</td>
                 <td>$${totalEarnings.toFixed(2)}</td>
                 <td>$${averageEarnings.toFixed(2)}</td>
             </tr>
@@ -176,7 +168,7 @@ export function exportScheduleToHtml(schedule: Schedule, bartenders: Bartender[]
             <h1>Bartender Schedule Report</h1>
             <p>${title}<br><small>(Note: Shift cells in the weekly schedule are editable for minor adjustments)</small></p>
         </div>
-        ${generateSummarySection(summaryData, targetShifts)}
+        ${generateSummarySection(summaryData)}
         ${generateWeeklySections(schedule)}
       </div>
     </body>

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import type { Schedule, Bartender, FixedAssignment, TargetShifts, TimeOffRequest } from './types';
+import type { Schedule, Bartender, FixedAssignment, TargetShifts, TimeOffRequest, ClosedShift } from './types';
 import { BARTENDERS as initialBartenders, SHIFTS_TEMPLATE, FIXED_ASSIGNMENTS as initialFixedAssignments, EARNINGS_MAP } from './data';
 import { generateSchedule } from './services/schedulingAlgorithm';
 import { exportScheduleToHtml } from './utils/scheduleExporter';
@@ -10,6 +10,7 @@ import FixedShiftManager from './components/FixedShiftManager';
 import WeeklyAvailabilityManager from './components/WeeklyAvailabilityManager';
 import TimeOffRequestManager from './components/TimeOffRequestManager';
 import TargetShiftsManager from './components/TargetShiftsManager';
+import EventShiftManager from './components/EventShiftManager';
 import { DownloadIcon } from './components/icons/DownloadIcon';
 import { CalendarIcon } from './components/icons/CalendarIcon';
 
@@ -28,6 +29,7 @@ const App: React.FC = () => {
   });
   const [timeOffRequests, setTimeOffRequests] = useState<TimeOffRequest[]>([]);
   const [targetShifts, setTargetShifts] = useState<TargetShifts>({});
+  const [closedShifts, setClosedShifts] = useState<ClosedShift[]>([]);
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +62,7 @@ const App: React.FC = () => {
     // Use a timeout to allow the UI to update to the loading state before the potentially blocking calculation starts.
     setTimeout(() => {
       try {
-        const generatedSchedule = generateSchedule(bartenders, SHIFTS_TEMPLATE, fixedAssignments, targetShifts, timeOffRequests);
+        const generatedSchedule = generateSchedule(bartenders, SHIFTS_TEMPLATE, fixedAssignments, targetShifts, timeOffRequests, closedShifts);
         setSchedule(generatedSchedule);
       } catch (err) {
         console.error(err);
@@ -69,7 +71,7 @@ const App: React.FC = () => {
         setIsLoading(false);
       }
     }, 50);
-  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests]);
+  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts]);
   
   const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
 
@@ -104,6 +106,12 @@ const App: React.FC = () => {
               fixedAssignments={fixedAssignments}
               setFixedAssignments={setFixedAssignments}
               bartenders={bartenders}
+              shifts={SHIFTS_TEMPLATE}
+            />
+
+            <EventShiftManager
+              closedShifts={closedShifts}
+              setClosedShifts={setClosedShifts}
               shifts={SHIFTS_TEMPLATE}
             />
 
