@@ -76,22 +76,23 @@ export async function generateSchedule(
     6.  **Additional Manager Rules:**
         -   ${userConstraints}
 
-    **Core Scheduling Instructions (Follow in This Exact Order):**
+    **Core Scheduling Instructions (Follow This Logic Precisely):**
 
-    1.  **Phase 1: Place Fixed Assignments.**
-        -   Your first step is to add ALL shifts from the "Fixed Assignments" list to the schedule. This is your highest priority. These shifts must exist in the final output exactly as specified.
-        -   If a fixed assignment is on a special event day (Mon, Tue, Wed), you simply add that single shift to the schedule for that week. Do NOT generate other shifts for that special day.
+    1.  **Phase 1: Place ALL Fixed Assignments.**
+        -   Your first and most important step is to add EVERY shift from the "Fixed Assignments" list to the schedule. These are non-negotiable and must appear in the final output exactly as specified.
+        -   If a fixed assignment is on a special event day (Mon-Wed), add only that single shift for the day.
 
-    2.  **Phase 2: Fill All Required Regular Shifts.**
-        -   After all fixed shifts are placed, your task is to fill every shift from the "Required Regular Shifts" template for all 4 weeks.
-        -   Every shift must be filled with the exact number of bartenders specified in its 'bartendersNeeded' property. Do not leave shifts empty or partially filled.
+    2.  **Phase 2: Fill Remaining Shifts to Meet Targets.**
+        -   After all fixed shifts are placed, fill ALL remaining "Required Regular Shifts" from the template for all 4 weeks.
+        -   Your **PRIMARY GOAL** is to meet the "Bartender Shift Targets". Distribute the shifts so that each bartender's final monthly count is as close as possible to their target number.
+        -   To ensure variety and fairness in assignments, **randomize your selection** of bartenders for each slot from the pool of those who are available and still need shifts to meet their target.
 
-    3.  **Phase 3: Prioritize Targets and Respect Constraints.**
-        -   While filling the shifts in Phase 2, you must adhere to the following rules:
-        -   **PRIMARY GOAL: Meet Shift Targets.** Your main objective is to assign bartenders in a way that their total monthly shift count gets as close as possible to their value in "Bartender Shift Targets".
-        -   **ABSOLUTE RULE: Respect All Unavailability.** A bartender can NEVER be scheduled on one of their recurring 'unavailableDays' OR during a 'Time Off Request' period.
-        -   **ABSOLUTE RULE: No Double Booking.** A bartender CANNOT be assigned to more than one shift on the same day.
-        -   **GENDER BALANCE:** For shifts where 'gender' is 'MF', the assigned 'bartenders' array must include at least one 'Male' and one 'Female' bartender.
+    3.  **Absolute Rules (Non-Negotiable Constraints):**
+        -   You must adhere to these rules at all times:
+        -   **Availability:** A bartender can NEVER be scheduled on one of their recurring 'unavailableDays' OR during a 'Time Off Request' period. This is the most critical constraint.
+        -   **No Double Booking:** A bartender CANNOT be assigned to more than one shift on the same day.
+        -   **Gender Balance:** For shifts where 'gender' is 'MF', you must assign at least one 'Male' and one 'Female' bartender.
+        -   **Full Staffing:** Every shift from the template must be filled with the exact number of bartenders specified in 'bartendersNeeded'.
 
     **Final Output Requirement:**
     -   Your final output must be a single JSON array of schedule entry objects, with no extra commentary or text. It should contain all the fixed shifts and all the filled regular shifts.
