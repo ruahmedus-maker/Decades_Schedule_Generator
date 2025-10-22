@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { Schedule, Bartender, FixedAssignment, TargetShifts, TimeOffRequest } from './types';
 import { BARTENDERS as initialBartenders, SHIFTS_TEMPLATE, FIXED_ASSIGNMENTS as initialFixedAssignments, EARNINGS_MAP } from './data';
-import { generateSchedule } from './services/geminiService';
+import { generateSchedule } from './services/schedulingAlgorithm';
 import { exportScheduleToHtml } from './utils/scheduleExporter';
 import ScheduleView from './components/ScheduleView';
 import SummaryView from './components/SummaryView';
@@ -28,7 +28,6 @@ const App: React.FC = () => {
   });
   const [timeOffRequests, setTimeOffRequests] = useState<TimeOffRequest[]>([]);
   const [targetShifts, setTargetShifts] = useState<TargetShifts>({});
-  const [constraints, setConstraints] = useState<string>('Distribute shifts as evenly as possible based on targets.\nTry to avoid scheduling someone for more than 4 consecutive days.');
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,21 +52,24 @@ const App: React.FC = () => {
     }
   }, [fixedAssignments]);
 
-  const handleGenerateSchedule = useCallback(async () => {
+  const handleGenerateSchedule = useCallback(() => {
     setIsLoading(true);
     setError(null);
     setSchedule(null);
 
-    try {
-      const generatedSchedule = await generateSchedule(bartenders, SHIFTS_TEMPLATE, fixedAssignments, constraints, targetShifts, timeOffRequests);
-      setSchedule(generatedSchedule);
-    } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : 'An unknown error occurred while generating the schedule.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [constraints, bartenders, fixedAssignments, targetShifts, timeOffRequests]);
+    // Use a timeout to allow the UI to update to the loading state before the potentially blocking calculation starts.
+    setTimeout(() => {
+      try {
+        const generatedSchedule = generateSchedule(bartenders, SHIFTS_TEMPLATE, fixedAssignments, targetShifts, timeOffRequests);
+        setSchedule(generatedSchedule);
+      } catch (err) {
+        console.error(err);
+        setError(err instanceof Error ? err.message : 'An unknown error occurred while generating the schedule. This could be due to impossible constraints (e.g., not enough staff for required shifts).');
+      } finally {
+        setIsLoading(false);
+      }
+    }, 50);
+  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests]);
   
   const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
 
@@ -104,20 +106,6 @@ const App: React.FC = () => {
               bartenders={bartenders}
               shifts={SHIFTS_TEMPLATE}
             />
-
-            <div>
-              <label htmlFor="constraints" className="block text-sm font-medium text-slate-300 mb-2">
-                Additional Rules & Constraints
-              </label>
-              <textarea
-                id="constraints"
-                rows={4}
-                className="w-full bg-slate-900/70 border border-slate-600 rounded-lg p-3 text-slate-200 placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out"
-                placeholder="e.g., Prioritize Laura for Friday night shifts this month."
-                value={constraints}
-                onChange={(e) => setConstraints(e.target.value)}
-              />
-            </div>
 
             <div className="pt-4 border-t border-slate-700">
               <button
@@ -181,7 +169,7 @@ const App: React.FC = () => {
               )}
                {isLoading && (
                   <div className="flex flex-col items-center justify-center min-h-[60vh] text-center text-slate-500 border-2 border-dashed border-slate-700 rounded-lg">
-                      <p className="text-lg font-semibold">AI is crafting the perfect schedule based on your rules...</p>
+                      <p className="text-lg font-semibold">Crafting the perfect schedule based on your rules...</p>
                       <p>This may take a moment.</p>
                   </div>
                )}
