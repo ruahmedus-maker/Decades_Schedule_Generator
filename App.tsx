@@ -15,7 +15,17 @@ import { CalendarIcon } from './components/icons/CalendarIcon';
 
 const App: React.FC = () => {
   const [bartenders, setBartenders] = useState<Bartender[]>(initialBartenders);
-  const [fixedAssignments, setFixedAssignments] = useState<FixedAssignment[]>(initialFixedAssignments);
+  const [fixedAssignments, setFixedAssignments] = useState<FixedAssignment[]>(() => {
+    try {
+      const savedAssignments = window.localStorage.getItem('fixedAssignments');
+      if (savedAssignments) {
+        return JSON.parse(savedAssignments);
+      }
+    } catch (error) {
+      console.error('Error reading fixed assignments from localStorage', error);
+    }
+    return initialFixedAssignments;
+  });
   const [timeOffRequests, setTimeOffRequests] = useState<TimeOffRequest[]>([]);
   const [targetShifts, setTargetShifts] = useState<TargetShifts>({});
   const [constraints, setConstraints] = useState<string>('Distribute shifts as evenly as possible based on targets.\nTry to avoid scheduling someone for more than 4 consecutive days.');
@@ -34,6 +44,14 @@ const App: React.FC = () => {
       return newTargets;
     });
   }, [bartenders]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('fixedAssignments', JSON.stringify(fixedAssignments));
+    } catch (error) {
+      console.error('Error saving fixed assignments to localStorage', error);
+    }
+  }, [fixedAssignments]);
 
   const handleGenerateSchedule = useCallback(async () => {
     setIsLoading(true);
