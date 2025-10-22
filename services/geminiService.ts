@@ -39,36 +39,36 @@ export async function generateSchedule(
     timeOffRequests: TimeOffRequest[]
 ): Promise<Schedule> {
   const prompt = `
-    You are an expert nightclub manager. Your task is to create a complete 4-week schedule for bartenders by following a strict set of priorities.
+    You are an expert nightclub manager. Your task is to create a complete 4-week schedule for bartenders by following a strict, sequential algorithm.
 
     **Input Data:**
 
     1.  **Bartender Roster:**
-        -   Experience tiers (lower is better), gender, and RECURRING weekly unavailable days.
+        -   Experience tiers, gender, and RECURRING weekly unavailable days.
         \`\`\`json
         ${JSON.stringify(bartenders, null, 2)}
         \`\`\`
 
     2.  **Required Regular Shifts (Thu-Sun):**
-        -   This is the template of all shifts that need to be filled *every week* on the regular operating days (Thursday to Sunday Night).
+        -   This is the template of all shifts that need to be filled *every week* on the regular operating days.
         \`\`\`json
         ${JSON.stringify(shifts, null, 2)}
         \`\`\`
 
     3.  **Fixed Assignments (Highest Priority):**
-        -   Mandatory, pre-assigned shifts. Some may be on special event days (Mon, Tue, Wed) which are NOT in the 'Required Regular Shifts' template. These are one-off events.
+        -   Mandatory, pre-assigned shifts that MUST be in the final schedule.
         \`\`\`json
         ${JSON.stringify(fixedAssignments, null, 2)}
         \`\`\`
 
     4.  **Bartender Shift Targets:**
-        -   The desired total number of shifts for each bartender for the entire 4-week period. This is your main goal for fairness.
+        -   The desired total number of shifts for each bartender for the entire 4-week period.
         \`\`\`json
         ${JSON.stringify(targetShifts, null, 2)}
         \`\`\`
 
     5.  **Specific Time Off Requests:**
-        -   Non-recurring vacation periods. These bartenders MUST NOT be scheduled during these date ranges.
+        -   Non-recurring vacation periods. Bartenders MUST NOT be scheduled during these dates.
         \`\`\`json
         ${JSON.stringify(timeOffRequests, null, 2)}
         \`\`\`
@@ -76,26 +76,29 @@ export async function generateSchedule(
     6.  **Additional Manager Rules:**
         -   ${userConstraints}
 
-    **Core Scheduling Instructions (Follow This Logic Precisely):**
+    **Core Scheduling Algorithm (Follow these steps in order without deviation):**
 
-    1.  **Phase 1: Place ALL Fixed Assignments.**
-        -   Your first and most important step is to add EVERY shift from the "Fixed Assignments" list to the schedule. These are non-negotiable and must appear in the final output exactly as specified.
-        -   If a fixed assignment is on a special event day (Mon-Wed), add only that single shift for the day.
+    **STEP 1: PLACE ALL FIXED ASSIGNMENTS (FOUNDATIONAL LAYER)**
+    -   Your first and most important task is to create a partial schedule containing ONLY the shifts from the "Fixed Assignments" list.
+    -   These assignments are the highest priority and are non-negotiable. Place them on the schedule exactly as specified.
+    -   Do not assign any other shifts at this stage.
 
-    2.  **Phase 2: Fill Remaining Shifts to Meet Targets.**
-        -   After all fixed shifts are placed, fill ALL remaining "Required Regular Shifts" from the template for all 4 weeks.
-        -   Your **PRIMARY GOAL** is to meet the "Bartender Shift Targets". Distribute the shifts so that each bartender's final monthly count is as close as possible to their target number.
-        -   To ensure variety and fairness in assignments, **randomize your selection** of bartenders for each slot from the pool of those who are available and still need shifts to meet their target.
+    **STEP 2: CALCULATE INTERMEDIATE SHIFT COUNTS**
+    -   After placing all fixed shifts, you must internally take a count of how many shifts each bartender has been assigned so far. This count will be the starting point for the next step.
 
-    3.  **Absolute Rules (Non-Negotiable Constraints):**
-        -   You must adhere to these rules at all times:
-        -   **Availability:** A bartender can NEVER be scheduled on one of their recurring 'unavailableDays' OR during a 'Time Off Request' period. This is the most critical constraint.
-        -   **No Double Booking:** A bartender CANNOT be assigned to more than one shift on the same day.
-        -   **Gender Balance:** For shifts where 'gender' is 'MF', you must assign at least one 'Male' and one 'Female' bartender.
-        -   **Full Staffing:** Every shift from the template must be filled with the exact number of bartenders specified in 'bartendersNeeded'.
+    **STEP 3: FILL REMAINING SHIFTS TO MEET TARGETS (COMPLETION LAYER)**
+    -   Using the partial schedule from Step 1 as your starting point, your task is to fill all shifts from the "Required Regular Shifts" template for all 4 weeks that are still empty.
+    -   Your **PRIMARY GOAL** for this step is to meet the "Bartender Shift Targets". When assigning bartenders to open slots, you must prioritize those who are furthest from their monthly target, considering the shifts they already received in Step 1.
+    -   Use randomization when choosing between equally suitable candidates to ensure fairness.
+
+    **Absolute Rules (Non-Negotiable Constraints to be applied throughout the entire process):**
+    -   **Availability:** A bartender can NEVER be scheduled on one of their recurring 'unavailableDays' OR during a 'Time Off Request' period. This is the most critical constraint.
+    -   **No Double Booking:** A bartender CANNOT be assigned to more than one shift on the same day.
+    -   **Gender Balance:** For shifts where 'gender' is 'MF', you must assign at least one 'Male' and one 'Female' bartender.
+    -   **Full Staffing:** Every regular shift from the template must be filled with the exact number of bartenders specified in 'bartendersNeeded'.
 
     **Final Output Requirement:**
-    -   Your final output must be a single JSON array of schedule entry objects, with no extra commentary or text. It should contain all the fixed shifts and all the filled regular shifts.
+    -   Your final output must be a single JSON array of schedule entry objects, with no extra commentary or text. It must contain all the fixed shifts from Step 1 and all the filled regular shifts from Step 3.
   `;
   
   try {
