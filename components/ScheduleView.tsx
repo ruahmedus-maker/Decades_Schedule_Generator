@@ -6,9 +6,11 @@ interface ScheduleViewProps {
   schedule: Schedule;
 }
 
+const DAY_ORDER: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Sun_Night'];
+const FLOOR_ORDER = ['Rooftop', 'Hip Hop', "2010's", "2000's"];
+
 const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule }) => {
   const weeks = [1, 2, 3, 4];
-  const days: DayOfWeek[] = ['Thu', 'Fri', 'Sat', 'Sun', 'Sun_Night'];
 
   return (
     <div className="space-y-8">
@@ -19,7 +21,9 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule }) => {
         }
 
         const scheduleGrid: Record<string, Record<string, string[]>> = {};
-        const floors = new Set<string>();
+        
+        const daysInWeek = Array.from(new Set(weekSchedule.map(entry => entry.day)))
+                                 .sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
 
         weekSchedule.forEach(entry => {
           const key = `${entry.floor} / ${entry.bar}`;
@@ -27,14 +31,20 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule }) => {
             scheduleGrid[key] = {};
           }
           scheduleGrid[key][entry.day] = entry.bartenders;
-          floors.add(entry.floor);
         });
 
-        const sortedFloors = Array.from(floors);
         const uniqueKeys = Object.keys(scheduleGrid).sort((a, b) => {
-            const floorA = a.split(' / ')[0];
-            const floorB = b.split(' / ')[0];
-            return sortedFloors.indexOf(floorA) - sortedFloors.indexOf(floorB);
+            const [floorA, barA] = a.split(' / ');
+            const [floorB, barB] = b.split(' / ');
+            const indexA = FLOOR_ORDER.indexOf(floorA);
+            const indexB = FLOOR_ORDER.indexOf(floorB);
+        
+            if (indexA !== indexB) {
+                if (indexA === -1) return 1;
+                if (indexB === -1) return -1;
+                return indexA - indexB;
+            }
+            return barA.localeCompare(barB);
         });
 
         return (
@@ -45,7 +55,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule }) => {
                 <thead className="text-xs text-slate-300 uppercase bg-slate-700/50">
                   <tr>
                     <th scope="col" className="px-6 py-3 rounded-l-lg">Shift (Floor / Bar)</th>
-                    {days.map(day => (
+                    {daysInWeek.map(day => (
                       <th key={day} scope="col" className="px-6 py-3">{day.replace('_', ' ')}</th>
                     ))}
                   </tr>
@@ -61,7 +71,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule }) => {
                         <td className="px-6 py-4 font-medium text-slate-200">
                           {floor}<br/><span className="text-xs text-slate-500">{bar}</span>
                         </td>
-                        {days.map(day => (
+                        {daysInWeek.map(day => (
                           <td key={day} className="px-6 py-4">
                             {(scheduleGrid[key][day] || []).join(', ')}
                           </td>

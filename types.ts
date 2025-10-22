@@ -1,4 +1,4 @@
-export type DayOfWeek = 'Thu' | 'Fri' | 'Sat' | 'Sun' | 'Sun_Night';
+export type DayOfWeek = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun' | 'Sun_Night';
 
 export interface Bartender {
   name: string;
@@ -10,7 +10,7 @@ export interface Bartender {
 export interface Shift {
   floor: string;
   bar: string;
-  day: DayOfWeek;
+  day: 'Thu' | 'Fri' | 'Sat' | 'Sun' | 'Sun_Night'; // Regular shifts are still on operating days
   gender: 'MF' | null;
   bartendersNeeded: number;
 }

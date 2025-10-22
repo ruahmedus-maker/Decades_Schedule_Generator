@@ -11,7 +11,7 @@ interface FixedShiftManagerProps {
 }
 
 const weekOptions: FixedAssignment['week'][] = ['Week_1', 'Week_2', 'Week_3', 'Week_4'];
-const dayOptions: DayOfWeek[] = ['Thu', 'Fri', 'Sat', 'Sun', 'Sun_Night'];
+const dayOptions: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Sun_Night'];
 
 const FixedShiftManager: React.FC<FixedShiftManagerProps> = ({ fixedAssignments, setFixedAssignments, bartenders, shifts }) => {
   const initialFormState = {
@@ -31,11 +31,18 @@ const FixedShiftManager: React.FC<FixedShiftManagerProps> = ({ fixedAssignments,
       }
       locations.get(shift.floor)!.add(shift.bar);
     });
+    // Also add locations from existing fixed assignments for special events
+    fixedAssignments.forEach(fa => {
+        if (!locations.has(fa.floor)) {
+            locations.set(fa.floor, new Set());
+        }
+        locations.get(fa.floor)!.add(fa.bar);
+    });
     return Array.from(locations.entries()).map(([floor, bars]) => ({
       floor,
       bars: Array.from(bars)
     }));
-  }, [shifts]);
+  }, [shifts, fixedAssignments]);
 
   const handleAddAssignment = (e: React.FormEvent) => {
     e.preventDefault();

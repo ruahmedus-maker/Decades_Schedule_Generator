@@ -1,4 +1,4 @@
-import type { Schedule, Bartender, TargetShifts, EarningsMap, SummaryData } from '../types';
+import type { Schedule, Bartender, TargetShifts, EarningsMap, SummaryData, DayOfWeek } from '../types';
 
 function getWeekData(schedule: Schedule, week: number) {
     return schedule.filter(s => s.week === week);
@@ -69,6 +69,9 @@ function generateSummarySection(summaryData: SummaryData[], targetShifts: Target
     return html;
 }
 
+const DAY_ORDER: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Sun_Night'];
+const FLOOR_ORDER = ['Rooftop', 'Hip Hop', "2010's", "2000's"];
+
 function generateWeeklySections(schedule: Schedule): string {
     let html = `<div class="section">
         <h2 class="section-title">🗓️ Weekly Schedules</h2>`;
@@ -78,7 +81,9 @@ function generateWeeklySections(schedule: Schedule): string {
         if (weekSchedule.length === 0) continue;
 
         const scheduleGrid: Record<string, Record<string, string[]>> = {};
-        const days: ('Thu'|'Fri'|'Sat'|'Sun'|'Sun_Night')[] = ['Thu', 'Fri', 'Sat', 'Sun', 'Sun_Night'];
+        
+        const daysInWeek = Array.from(new Set(weekSchedule.map(entry => entry.day)))
+                                 .sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
 
         weekSchedule.forEach(entry => {
             const key = `${entry.floor} / ${entry.bar}`;
@@ -86,22 +91,17 @@ function generateWeeklySections(schedule: Schedule): string {
             scheduleGrid[key][entry.day] = entry.bartenders;
         });
 
-        // Custom sort order for floors
-        const floorOrder = ['Rooftop', 'Hip Hop', "2010's", "2000's"];
-
         const uniqueKeys = Object.keys(scheduleGrid).sort((a, b) => {
             const [floorA, barA] = a.split(' / ');
             const [floorB, barB] = b.split(' / ');
-            const indexA = floorOrder.indexOf(floorA);
-            const indexB = floorOrder.indexOf(floorB);
+            const indexA = FLOOR_ORDER.indexOf(floorA);
+            const indexB = FLOOR_ORDER.indexOf(floorB);
         
             if (indexA !== indexB) {
-                // Handle cases where a floor might not be in the order list
                 if (indexA === -1) return 1;
                 if (indexB === -1) return -1;
                 return indexA - indexB;
             }
-            // Secondary sort by bar name if floors are the same
             return barA.localeCompare(barB);
         });
 
@@ -111,7 +111,7 @@ function generateWeeklySections(schedule: Schedule): string {
                 <thead>
                     <tr>
                         <th>Shift (Floor / Bar)</th>
-                        ${days.map(d => `<th>${d.replace('_', ' ')}</th>`).join('')}
+                        ${daysInWeek.map(d => `<th>${d.replace('_', ' ')}</th>`).join('')}
                     </tr>
                 </thead>
                 <tbody>`;
@@ -121,7 +121,7 @@ function generateWeeklySections(schedule: Schedule): string {
             const floorClass = `floor-${floor.toLowerCase().replace(/'s/g, '').replace(/\s+/g, '-')}`;
             html += `<tr class="${floorClass}">
                 <td><strong>${floor}</strong><br><span class="bar-name">${bar}</span></td>`;
-            days.forEach(day => {
+            daysInWeek.forEach(day => {
                 const bartenders = scheduleGrid[key][day] || [];
                 html += `<td contenteditable="true" class="editable-cell">${bartenders.join('<br>')}</td>`;
             });
