@@ -87,9 +87,9 @@ const App: React.FC = () => {
           </p>
         </header>
 
-        <main className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+        <main className="grid grid-cols-1 xl:grid-cols-4 xl:items-start gap-8">
           {/* Controls Section */}
-          <aside className="xl:col-span-1 space-y-8 p-6 bg-slate-800/50 rounded-2xl border border-slate-700 shadow-lg h-fit xl:sticky xl:top-8">
+          <aside className="xl:col-span-1 space-y-8 p-6 bg-slate-800/50 rounded-2xl border border-slate-700 shadow-lg xl:sticky xl:top-8">
             <BartenderManager bartenders={bartenders} setBartenders={setBartenders} />
             
             <WeeklyAvailabilityManager bartenders={bartenders} setBartenders={setBartenders} />

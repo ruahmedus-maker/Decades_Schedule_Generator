@@ -23,8 +23,8 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule }) => {
 
         const scheduleGrid: Record<string, Record<string, string[]>> = {};
         
-        // FIX: Explicitly type `daysInWeek` to ensure `day` is correctly typed in subsequent maps.
-        const daysInWeek: DayOfWeek[] = Array.from(new Set(weekSchedule.map(entry => entry.day)))
+        // FIX: Use spread syntax for better type inference when creating an array from a Set.
+        const daysInWeek: DayOfWeek[] = [...new Set(weekSchedule.map(entry => entry.day))]
                                  .sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
 
         weekSchedule.forEach(entry => {
