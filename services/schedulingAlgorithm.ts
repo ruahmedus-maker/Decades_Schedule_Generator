@@ -78,6 +78,7 @@ export function generateSchedule(
   const shiftCounts: Record<string, number> = bartenders.reduce((acc, b) => ({ ...acc, [b.name]: 0 }), {});
   const timeOffMap = createTimeOffMap(timeOffRequests);
   const closedShiftsSet = new Set(closedShifts.map(cs => `${cs.week}-${cs.day}-${cs.floor}-${cs.bar}`));
+  const saturday2000sWorkers = new Set<string>();
 
 
   // 2. CREATE EMPTY SCHEDULE STRUCTURE based on template, excluding closed shifts
@@ -122,6 +123,10 @@ export function generateSchedule(
         if(shiftCounts[assignment.name] !== undefined) {
           shiftCounts[assignment.name]++;
         }
+        // Track for Saturday 2000's rotation rule
+        if (assignment.day === 'Sat' && assignment.floor === "2000's") {
+          saturday2000sWorkers.add(assignment.name);
+        }
     }
   });
   
@@ -149,6 +154,11 @@ export function generateSchedule(
         let availableCandidates = bartenders.filter(b => 
             isBartenderAvailable(b, week, day, timeOffMap, scheduledThisDay)
         );
+        
+        // Apply the Saturday 2000's floor rotation rule
+        if (day === 'Sat' && shift.floor === "2000's") {
+          availableCandidates = availableCandidates.filter(c => !saturday2000sWorkers.has(c.name));
+        }
 
         // Sort candidates by who needs shifts the most to meet their target.
         availableCandidates.sort((a, b) => {
@@ -192,6 +202,11 @@ export function generateSchedule(
             shift.bartenders.push(bartender.name);
             shiftCounts[bartender.name]++;
             scheduledThisDay.add(bartender.name);
+
+            // Add assigned bartender to the rotation set for this month
+            if (day === 'Sat' && shift.floor === "2000's") {
+              saturday2000sWorkers.add(bartender.name);
+            }
           }
         }
       }

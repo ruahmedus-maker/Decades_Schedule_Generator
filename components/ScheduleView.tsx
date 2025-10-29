@@ -23,8 +23,8 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule }) => {
 
         const scheduleGrid: Record<string, Record<string, string[]>> = {};
         
-        // Fix: Use Array.from for better type inference when creating an array from a Set.
-        const daysInWeek: DayOfWeek[] = Array.from(new Set(weekSchedule.map(entry => entry.day)))
+        // Fix: Use spread syntax for creating an array from a Set to ensure correct type inference.
+        const daysInWeek: DayOfWeek[] = [...new Set(weekSchedule.map(entry => entry.day))]
                                  .sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
 
         weekSchedule.forEach(entry => {
