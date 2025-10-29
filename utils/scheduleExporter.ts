@@ -64,6 +64,52 @@ function generateSummarySection(summaryData: SummaryData[]): string {
 const DAY_ORDER: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Sun_Night'];
 const FLOOR_ORDER = ['Rooftop', 'Hip Hop', "2010's", "2000's"];
 
+function calculateFloorDistributionData(schedule: Schedule, bartenders: Bartender[]): [string, Record<string, number>][] {
+    const data: Record<string, Record<string, number>> = bartenders.reduce((acc, b) => {
+      acc[b.name] = {};
+      FLOOR_ORDER.forEach(floor => {
+        acc[b.name][floor] = 0;
+      });
+      return acc;
+    }, {} as Record<string, Record<string, number>>);
+
+    schedule.forEach(entry => {
+      const { floor, bartenders: assigned } = entry;
+      assigned.forEach(name => {
+        if (data[name] && data[name][floor] !== undefined) {
+          data[name][floor]++;
+        }
+      });
+    });
+
+    return Object.entries(data).sort(([nameA], [nameB]) => nameA.localeCompare(nameB));
+}
+
+function generateFloorDistributionSection(distributionData: [string, Record<string, number>][]): string {
+    let html = `<div class="section">
+        <h2 class="section-title">🏢 Floor Distribution</h2>
+        <table class="summary-table">
+            <thead>
+                <tr>
+                    <th>Bartender</th>
+                    ${FLOOR_ORDER.map(floor => `<th>${floor}</th>`).join('')}
+                </tr>
+            </thead>
+            <tbody>`;
+
+    distributionData.forEach(([name, floors]) => {
+        html += `
+            <tr>
+                <td>${name}</td>
+                ${FLOOR_ORDER.map(floor => `<td>${floors[floor] || 0}</td>`).join('')}
+            </tr>
+        `;
+    });
+
+    html += `</tbody></table></div>`;
+    return html;
+}
+
 function generateWeeklySections(schedule: Schedule): string {
     let html = `<div class="section">
         <h2 class="section-title">🗓️ Weekly Schedules</h2>`;
@@ -129,6 +175,7 @@ function generateWeeklySections(schedule: Schedule): string {
 
 export function exportScheduleToHtml(schedule: Schedule, bartenders: Bartender[], targetShifts: TargetShifts, title: string, earningsMap: EarningsMap) {
   const summaryData = calculateSummaryData(schedule, bartenders, earningsMap);
+  const distributionData = calculateFloorDistributionData(schedule, bartenders);
   const htmlContent = `
     <!DOCTYPE html>
     <html lang="en">
@@ -169,6 +216,7 @@ export function exportScheduleToHtml(schedule: Schedule, bartenders: Bartender[]
             <p>${title}<br><small>(Note: Shift cells in the weekly schedule are editable for minor adjustments)</small></p>
         </div>
         ${generateSummarySection(summaryData)}
+        ${generateFloorDistributionSection(distributionData)}
         ${generateWeeklySections(schedule)}
       </div>
     </body>

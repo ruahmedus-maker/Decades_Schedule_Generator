@@ -13,6 +13,7 @@ import TargetShiftsManager from './components/TargetShiftsManager';
 import EventShiftManager from './components/EventShiftManager';
 import { DownloadIcon } from './components/icons/DownloadIcon';
 import { CalendarIcon } from './components/icons/CalendarIcon';
+import FloorDistributionView from './components/FloorDistributionView';
 
 const App: React.FC = () => {
   const [bartenders, setBartenders] = useState<Bartender[]>(initialBartenders);
@@ -164,6 +165,7 @@ const App: React.FC = () => {
               {schedule ? (
                 <>
                   <SummaryView schedule={schedule} bartenders={bartenders} earningsMap={EARNINGS_MAP} />
+                  <FloorDistributionView schedule={schedule} bartenders={bartenders} />
                   <ScheduleView schedule={schedule} />
                 </>
               ) : (
