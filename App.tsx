@@ -16,35 +16,68 @@ import { CalendarIcon } from './components/icons/CalendarIcon';
 import FloorDistributionView from './components/FloorDistributionView';
 
 const App: React.FC = () => {
-  const [bartenders, setBartenders] = useState<Bartender[]>(initialBartenders);
+  // --- State Initialization with Persistence ---
+  const [bartenders, setBartenders] = useState<Bartender[]>(() => {
+    try {
+      const saved = window.localStorage.getItem('bartenders');
+      return saved ? JSON.parse(saved) : initialBartenders;
+    } catch (error) {
+      console.error('Error reading bartenders from localStorage', error);
+      return initialBartenders;
+    }
+  });
+
   const [fixedAssignments, setFixedAssignments] = useState<FixedAssignment[]>(() => {
     try {
-      const savedAssignments = window.localStorage.getItem('fixedAssignments');
-      if (savedAssignments) {
-        return JSON.parse(savedAssignments);
-      }
+      const saved = window.localStorage.getItem('fixedAssignments');
+      return saved ? JSON.parse(saved) : initialFixedAssignments;
     } catch (error) {
       console.error('Error reading fixed assignments from localStorage', error);
+      return initialFixedAssignments;
     }
-    return initialFixedAssignments;
   });
-  const [timeOffRequests, setTimeOffRequests] = useState<TimeOffRequest[]>([]);
-  const [targetShifts, setTargetShifts] = useState<TargetShifts>({});
-  const [closedShifts, setClosedShifts] = useState<ClosedShift[]>([]);
+
+  const [timeOffRequests, setTimeOffRequests] = useState<TimeOffRequest[]>(() => {
+    try {
+      const saved = window.localStorage.getItem('timeOffRequests');
+      return saved ? JSON.parse(saved) : [];
+    } catch (error) {
+      console.error('Error reading timeOffRequests from localStorage', error);
+      return [];
+    }
+  });
+
+  const [targetShifts, setTargetShifts] = useState<TargetShifts>(() => {
+    try {
+      const saved = window.localStorage.getItem('targetShifts');
+      return saved ? JSON.parse(saved) : {};
+    } catch (error) {
+      console.error('Error reading targetShifts from localStorage', error);
+      return {};
+    }
+  });
+  
+  const [closedShifts, setClosedShifts] = useState<ClosedShift[]>(() => {
+    try {
+      const saved = window.localStorage.getItem('closedShifts');
+      return saved ? JSON.parse(saved) : [];
+    } catch (error) {
+      console.error('Error reading closedShifts from localStorage', error);
+      return [];
+    }
+  });
+
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   
+  // --- State Persistence ---
   useEffect(() => {
-    // Initialize or update target shifts when bartenders list changes
-    setTargetShifts(prevTargets => {
-      const newTargets: TargetShifts = {};
-      const averageShifts = Math.floor(SHIFTS_TEMPLATE.length * 4 * 1.5 / bartenders.length) || 10;
-      bartenders.forEach(b => {
-        newTargets[b.name] = prevTargets[b.name] || averageShifts;
-      });
-      return newTargets;
-    });
+    try {
+      window.localStorage.setItem('bartenders', JSON.stringify(bartenders));
+    } catch (error) {
+      console.error('Error saving bartenders to localStorage', error);
+    }
   }, [bartenders]);
 
   useEffect(() => {
@@ -54,6 +87,46 @@ const App: React.FC = () => {
       console.error('Error saving fixed assignments to localStorage', error);
     }
   }, [fixedAssignments]);
+  
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('timeOffRequests', JSON.stringify(timeOffRequests));
+    } catch (error) {
+      console.error('Error saving timeOffRequests to localStorage', error);
+    }
+  }, [timeOffRequests]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('targetShifts', JSON.stringify(targetShifts));
+    } catch (error) {
+      console.error('Error saving targetShifts to localStorage', error);
+    }
+  }, [targetShifts]);
+  
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('closedShifts', JSON.stringify(closedShifts));
+    } catch (error) {
+      console.error('Error saving closedShifts to localStorage', error);
+    }
+  }, [closedShifts]);
+
+  // --- Logic Effects ---
+  useEffect(() => {
+    // Sync target shifts with the main bartender list.
+    // This adds new bartenders with a default target and removes bartenders who are no longer in the roster.
+    setTargetShifts(prevTargets => {
+      const newTargets: TargetShifts = {};
+      const averageShifts = Math.floor(SHIFTS_TEMPLATE.length * 4 * 1.5 / bartenders.length) || 10;
+      
+      bartenders.forEach(b => {
+        // If a target already exists (e.g., from localStorage), use it. Otherwise, set a default.
+        newTargets[b.name] = prevTargets[b.name] !== undefined ? prevTargets[b.name] : averageShifts;
+      });
+      return newTargets;
+    });
+  }, [bartenders]);
 
   const handleGenerateSchedule = useCallback(() => {
     setIsLoading(true);
