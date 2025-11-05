@@ -98,9 +98,19 @@ export function generateSchedule(
     });
   }
 
-  // 3. PLACE FIXED ASSIGNMENTS (HIGHEST PRIORITY)
-  fixedAssignments.forEach(assignment => {
+  // 3. VALIDATE AND PLACE FIXED ASSIGNMENTS (HIGHEST PRIORITY)
+  const dailyFixedAssignments = new Set<string>(); // key: `${name}-${week}-${day}`
+  
+  for (const assignment of fixedAssignments) {
     const weekNum = parseInt(assignment.week.split('_')[1]);
+    const assignmentKey = `${assignment.name}-${weekNum}-${assignment.day}`;
+    
+    // Check for double booking within the provided fixed assignments.
+    if (dailyFixedAssignments.has(assignmentKey)) {
+        throw new Error(`Conflicting fixed assignment: ${assignment.name} is assigned to more than one shift on Week ${weekNum}, ${assignment.day}. Please correct the fixed shifts.`);
+    }
+    dailyFixedAssignments.add(assignmentKey);
+
     let shift = schedule.find(s => 
         s.week === weekNum && 
         s.day === assignment.day &&
@@ -128,7 +138,7 @@ export function generateSchedule(
           saturday2000sWorkers.add(assignment.name);
         }
     }
-  });
+  }
   
   // 4. FILL REMAINING SHIFTS
   for (let week = 1; week <= 4; week++) {
