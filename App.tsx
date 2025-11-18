@@ -219,7 +219,7 @@ const App: React.FC = () => {
               <h2 className="text-2xl font-bold text-white">Schedule for {currentMonth}</h2>
               {schedule && schedule.length > 0 && (
                 <button
-                  onClick={() => exportScheduleToHtml(schedule, currentMonth)}
+                  onClick={() => exportScheduleToHtml(schedule, currentMonth, bartenders, EARNINGS_MAP)}
                   className="flex items-center justify-center sm:justify-start gap-2 bg-slate-700 text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-slate-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-slate-500"
                 >
                   <DownloadIcon className="h-5 w-5" />

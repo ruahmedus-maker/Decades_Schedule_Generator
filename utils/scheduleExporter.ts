@@ -1,4 +1,4 @@
-import type { Schedule, DayOfWeek } from '../types';
+import type { Schedule, DayOfWeek, Bartender, EarningsMap } from '../types';
 
 function getWeekData(schedule: Schedule, week: number) {
     return schedule.filter(s => s.week === week);
@@ -6,6 +6,56 @@ function getWeekData(schedule: Schedule, week: number) {
 
 const DAY_ORDER: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Sun_Night'];
 const FLOOR_ORDER = ['Rooftop', 'Hip Hop', "2010's", "2000's"];
+
+function generateSummarySection(schedule: Schedule, bartenders: Bartender[], earningsMap: EarningsMap): string {
+    const summary: Record<string, { shiftCount: number; totalEarnings: number }> = 
+        bartenders.reduce((acc, b) => ({ ...acc, [b.name]: { shiftCount: 0, totalEarnings: 0 } }), {});
+
+    schedule.forEach(entry => {
+        const { floor, bar, day, bartenders: assigned } = entry;
+        const earnings = earningsMap[floor]?.[bar]?.[day] || 0;
+        
+        assigned.forEach(name => {
+            if (!summary[name]) {
+                 summary[name] = { shiftCount: 0, totalEarnings: 0 };
+            }
+            summary[name].shiftCount++;
+            summary[name].totalEarnings += earnings;
+        });
+    });
+
+    const summaryData = Object.entries(summary).map(([name, data]) => ({
+        name,
+        shiftCount: data.shiftCount,
+        totalEarnings: data.totalEarnings,
+        averageEarnings: data.shiftCount > 0 ? data.totalEarnings / data.shiftCount : 0
+    })).sort((a, b) => a.name.localeCompare(b.name));
+
+    let html = `<div class="section">
+        <h2 class="section-title">📊 Monthly Summary</h2>
+        <table class="summary-table">
+            <thead>
+                <tr>
+                    <th>Bartender</th>
+                    <th>Total Shifts</th>
+                    <th>Total Earnings</th>
+                    <th>Avg. / Shift</th>
+                </tr>
+            </thead>
+            <tbody>`;
+    
+    summaryData.forEach(row => {
+        html += `<tr>
+            <td><strong>${row.name}</strong></td>
+            <td style="text-align:center;">${row.shiftCount}</td>
+            <td style="text-align:center;">$${row.totalEarnings.toFixed(2)}</td>
+            <td style="text-align:center;">$${row.averageEarnings.toFixed(2)}</td>
+        </tr>`;
+    });
+
+    html += `</tbody></table></div><hr style="border: 0; border-top: 2px solid #eee; margin: 30px 0;">`;
+    return html;
+}
 
 function generateWeeklySections(schedule: Schedule): string {
     let html = `<div class="section">
@@ -70,7 +120,7 @@ function generateWeeklySections(schedule: Schedule): string {
     return html;
 }
 
-export function exportScheduleToHtml(schedule: Schedule, title: string) {
+export function exportScheduleToHtml(schedule: Schedule, title: string, bartenders: Bartender[], earningsMap: EarningsMap) {
   const htmlContent = `
     <!DOCTYPE html>
     <html lang="en">
@@ -102,6 +152,8 @@ export function exportScheduleToHtml(schedule: Schedule, title: string) {
         .floor-2000s { background-color: rgba(232, 245, 233, 0.4); }
         .editable-cell { cursor: text; background-color: rgba(255, 253, 208, 0.5); }
         .editable-cell:focus { outline: 2px solid #3498db; background-color: #fff; }
+        .summary-table th { text-align: center; }
+        .summary-table th:first-child, .summary-table td:first-child { text-align: left; }
       </style>
     </head>
     <body>
@@ -110,6 +162,7 @@ export function exportScheduleToHtml(schedule: Schedule, title: string) {
             <h1>Bartender Schedule Report</h1>
             <p>${title}<br><small>(Note: Shift cells in the weekly schedule are editable for minor adjustments)</small></p>
         </div>
+        ${generateSummarySection(schedule, bartenders, earningsMap)}
         ${generateWeeklySections(schedule)}
       </div>
     </body>
