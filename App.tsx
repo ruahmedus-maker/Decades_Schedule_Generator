@@ -192,23 +192,33 @@ const App: React.FC = () => {
   }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode, startDate, dailyOverrides]);
   
   const getScheduleTitle = () => {
+    if (!startDate) return 'Schedule';
+    
+    const dateObj = new Date(startDate + 'T00:00:00');
+    
+    if (generationMode === 'daily') {
+        return dateObj.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    }
+
+    const startMonday = getMonday(dateObj);
+    
+    if (generationMode === 'weekly') {
+        return `Week of ${startMonday.toLocaleDateString()}`;
+    }
+    
     if (generationMode === 'monthly') {
-        return new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+        const endDate = new Date(startMonday);
+        endDate.setDate(endDate.getDate() + 27); // 4 weeks (28 days) - 1 day to get end date
+        return `${startMonday.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
     }
-    if (startDate) {
-        const dateObj = new Date(startDate + 'T00:00:00');
-        if (generationMode === 'daily') {
-            return dateObj.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
-        }
-        return `Week of ${dateObj.toLocaleDateString()}`;
-    }
-    return 'Weekly Schedule';
+    
+    return 'Schedule';
   };
 
   const getEffectiveMondayDate = () => {
-    if (generationMode === 'monthly' || !startDate) return undefined;
-    // If daily or weekly, we want to pass the Monday of that week to ScheduleView
-    // so it calculates header dates correctly (since ScheduleView assumes StartDate is a Monday)
+    if (!startDate) return undefined;
+    // We pass the Monday of the selected week (or start week) to ScheduleView/Exporter
+    // so they can calculate offsets correctly.
     const d = new Date(startDate + 'T00:00:00');
     const monday = getMonday(d);
     return monday.toISOString().split('T')[0];
@@ -257,22 +267,20 @@ const App: React.FC = () => {
                     </button>
                 </div>
                 
-                {(generationMode === 'weekly' || generationMode === 'daily') && (
-                    <div className="mt-3 animate-fadeIn">
-                        <label className="block text-xs text-slate-400 mb-1">
-                            {generationMode === 'weekly' ? 'Week Starting (Monday)' : 'Select Date'}
-                        </label>
-                        <div className="relative">
-                            <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none"/>
-                            <input 
-                                type="date" 
-                                value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
-                                className="w-full bg-slate-900/70 border border-slate-600 rounded-md py-2 pl-9 pr-3 text-sm text-slate-200 focus:ring-1 focus:ring-indigo-500"
-                            />
-                        </div>
+                <div className="mt-3 animate-fadeIn">
+                    <label className="block text-xs text-slate-400 mb-1">
+                        {generationMode === 'daily' ? 'Select Date' : 'Start Date (Monday of Week 1)'}
+                    </label>
+                    <div className="relative">
+                        <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none"/>
+                        <input 
+                            type="date" 
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            className="w-full bg-slate-900/70 border border-slate-600 rounded-md py-2 pl-9 pr-3 text-sm text-slate-200 focus:ring-1 focus:ring-indigo-500"
+                        />
                     </div>
-                )}
+                </div>
             </div>
 
             {/* Daily Overrides (Only visible in Daily Mode) */}

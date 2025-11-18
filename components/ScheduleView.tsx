@@ -13,7 +13,7 @@ const FLOOR_ORDER = ['Rooftop', 'Hip Hop', "2010's", "2000's"];
 const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate }) => {
   const weeks = [1, 2, 3, 4];
 
-  const getFormattedDate = (start: string, day: DayOfWeek) => {
+  const getFormattedDate = (start: string, day: DayOfWeek, weekIndex: number) => {
     const date = new Date(start);
     // Adjust date based on day index from Monday (0)
     // Assumes startDate is the Monday of the week
@@ -21,7 +21,9 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate }) => {
     // Map Sun_Night to Sunday (same date)
     const offset = dayIndex === 7 ? 6 : dayIndex; 
     
-    date.setDate(date.getDate() + offset);
+    // Add offsets: day offset within the week + week offset (e.g. week 2 adds 7 days)
+    // weekIndex comes in as 1, 2, 3, 4. So (weekIndex - 1) * 7 gives 0, 7, 14, 21.
+    date.setDate(date.getDate() + offset + ((weekIndex - 1) * 7));
     return `${day.replace('_', ' ')} ${date.getMonth() + 1}/${date.getDate()}`;
   }
 
@@ -65,7 +67,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate }) => {
         return (
           <div key={week}>
             <h3 className="text-xl font-bold text-indigo-400 mb-3">
-                {startDate && week === 1 ? 'Weekly Schedule' : `Week ${week}`}
+                {startDate ? `Week ${week}` : `Week ${week}`}
             </h3>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[800px] text-sm text-left text-slate-400">
@@ -74,7 +76,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate }) => {
                     <th scope="col" className="px-6 py-3 rounded-l-lg">Shift (Floor / Bar)</th>
                     {daysInWeek.map(day => (
                       <th key={day} scope="col" className="px-6 py-3">
-                        {startDate && week === 1 ? getFormattedDate(startDate, day) : day.replace('_', ' ')}
+                        {startDate ? getFormattedDate(startDate, day, week) : day.replace('_', ' ')}
                       </th>
                     ))}
                   </tr>

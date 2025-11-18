@@ -101,14 +101,14 @@ function generateFloorDistributionSection(schedule: Schedule, bartenders: Barten
     return html;
 }
 
-function getFormattedDate(start: string, day: DayOfWeek) {
+function getFormattedDate(start: string, day: DayOfWeek, weekOffset: number) {
     const date = new Date(start);
     // Assumes startDate is the Monday of the week.
     const dayIndex = DAY_ORDER.indexOf(day);
     // Map Sun_Night to Sunday date
     const offset = dayIndex === 7 ? 6 : dayIndex; 
     
-    date.setDate(date.getDate() + offset);
+    date.setDate(date.getDate() + offset + (weekOffset * 7));
     return `${day.replace('_', ' ')} ${date.getMonth() + 1}/${date.getDate()}`;
 }
 
@@ -146,8 +146,11 @@ function generateWeeklySections(schedule: Schedule, startDate?: string): string 
         });
 
         let title = `Week ${i}`;
-        if (startDate && i === 1) {
-            title = `Weekly Schedule (Week of ${new Date(startDate).toLocaleDateString()})`;
+        if (startDate) {
+             // Use week offset i-1
+             const weekStart = new Date(startDate);
+             weekStart.setDate(weekStart.getDate() + (i - 1) * 7);
+             title = `Week ${i} (Starting ${weekStart.toLocaleDateString()})`;
         }
 
         html += `<div class="week-table">
@@ -157,7 +160,7 @@ function generateWeeklySections(schedule: Schedule, startDate?: string): string 
                     <tr>
                         <th>Shift (Floor / Bar)</th>
                         ${daysInWeek.map(d => {
-                            const label = (startDate && i === 1) ? getFormattedDate(startDate, d) : d.replace('_', ' ');
+                            const label = startDate ? getFormattedDate(startDate, d, i - 1) : d.replace('_', ' ');
                             return `<th>${label}</th>`;
                         }).join('')}
                     </tr>
