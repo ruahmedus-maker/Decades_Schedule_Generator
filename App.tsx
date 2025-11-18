@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
-import type { Schedule, Bartender, FixedAssignment, TargetShifts, TimeOffRequest, ClosedShift, DayOfWeek } from './types';
+import type { Schedule, Bartender, FixedAssignment, TargetShifts, TimeOffRequest, ClosedShift, DayOfWeek, DailyOverride } from './types';
 import { BARTENDERS as initialBartenders, SHIFTS_TEMPLATE, FIXED_ASSIGNMENTS as initialFixedAssignments, EARNINGS_MAP } from './data';
 import { generateSchedule } from './services/schedulingAlgorithm';
 import { exportScheduleToHtml } from './utils/scheduleExporter';
@@ -12,6 +12,7 @@ import WeeklyAvailabilityManager from './components/WeeklyAvailabilityManager';
 import TimeOffRequestManager from './components/TimeOffRequestManager';
 import TargetShiftsManager from './components/TargetShiftsManager';
 import EventShiftManager from './components/EventShiftManager';
+import DailyOverrideManager from './components/DailyOverrideManager';
 import { DownloadIcon } from './components/icons/DownloadIcon';
 import { CalendarIcon } from './components/icons/CalendarIcon';
 import FloorDistributionView from './components/FloorDistributionView';
@@ -76,6 +77,9 @@ const App: React.FC = () => {
     d.setDate(d.getDate() + (1 + 7 - d.getDay()) % 7);
     return d.toISOString().split('T')[0];
   });
+  
+  // Transient state for single day overrides (not persisted to localStorage)
+  const [dailyOverrides, setDailyOverrides] = useState<DailyOverride[]>([]);
 
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -173,7 +177,9 @@ const App: React.FC = () => {
             timeOffRequests, 
             closedShifts,
             weeksToGenerate,
-            specificDay
+            specificDay,
+            // Pass daily overrides only in daily mode
+            generationMode === 'daily' ? dailyOverrides : []
         );
         setSchedule(generatedSchedule);
       } catch (err) {
@@ -183,7 +189,7 @@ const App: React.FC = () => {
         setIsLoading(false);
       }
     }, 50);
-  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode, startDate]);
+  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode, startDate, dailyOverrides]);
   
   const getScheduleTitle = () => {
     if (generationMode === 'monthly') {
@@ -269,6 +275,16 @@ const App: React.FC = () => {
                 )}
             </div>
 
+            {/* Daily Overrides (Only visible in Daily Mode) */}
+            {generationMode === 'daily' && (
+                 <DailyOverrideManager 
+                    dailyOverrides={dailyOverrides}
+                    setDailyOverrides={setDailyOverrides}
+                    bartenders={bartenders}
+                    shifts={SHIFTS_TEMPLATE}
+                 />
+            )}
+
             <BartenderManager bartenders={bartenders} setBartenders={setBartenders} />
             
             <WeeklyAvailabilityManager bartenders={bartenders} setBartenders={setBartenders} />
@@ -281,6 +297,7 @@ const App: React.FC = () => {
 
             <TargetShiftsManager targetShifts={targetShifts} setTargetShifts={setTargetShifts} />
             
+            {/* Standard Fixed Shift Manager (Always visible, but logic handles daily overrides) */}
             <FixedShiftManager
               fixedAssignments={fixedAssignments}
               setFixedAssignments={setFixedAssignments}
@@ -349,7 +366,7 @@ const App: React.FC = () => {
             )}
             
             <div className="mt-4 space-y-8">
-              {schedule ? (
+              {schedule && schedule.length > 0 ? (
                 <>
                   <SummaryView schedule={schedule} bartenders={bartenders} earningsMap={EARNINGS_MAP} />
                   <FloorDistributionView schedule={schedule} bartenders={bartenders} />
@@ -363,7 +380,11 @@ const App: React.FC = () => {
                   <div className="flex flex-col items-center justify-center min-h-[60vh] text-center text-slate-500 border-2 border-dashed border-slate-700 rounded-lg">
                       <CalendarIcon className="h-16 w-16 mb-4 text-slate-600"/>
                       <p className="text-lg font-semibold">Your generated schedule will appear here.</p>
-                      <p>Click "Generate Schedule" to begin.</p>
+                      {generationMode === 'daily' && (
+                          <p className="text-sm mt-2 text-amber-400/70 max-w-md">
+                              Note: If the selected day (e.g. Monday) has no standard shifts, the schedule will be empty unless you add <strong>Daily Specific Assignments</strong>.
+                          </p>
+                      )}
                   </div>
                  )
               )}

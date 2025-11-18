@@ -24,6 +24,12 @@ export interface FixedAssignment {
     name: string;
 }
 
+export interface DailyOverride {
+    floor: string;
+    bar: string;
+    name: string;
+}
+
 export interface ClosedShift {
   id: string;
   week: `Week_${1|2|3|4}`;

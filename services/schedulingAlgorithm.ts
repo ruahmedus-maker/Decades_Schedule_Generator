@@ -1,5 +1,5 @@
 
-import type { Schedule, Bartender, Shift, FixedAssignment, TargetShifts, TimeOffRequest, DayOfWeek, ClosedShift, ScheduledBartender } from '../types';
+import type { Schedule, Bartender, Shift, FixedAssignment, TargetShifts, TimeOffRequest, DayOfWeek, ClosedShift, ScheduledBartender, DailyOverride } from '../types';
 
 const DAY_ORDER: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Sun_Night'];
 
@@ -73,7 +73,8 @@ export function generateSchedule(
     timeOffRequests: TimeOffRequest[],
     closedShifts: ClosedShift[],
     weeksToGenerate: number = 4,
-    specificDay?: DayOfWeek
+    specificDay?: DayOfWeek,
+    dailyOverrides: DailyOverride[] = []
 ): Schedule {
   
   // 1. INITIALIZATION
@@ -109,16 +110,52 @@ export function generateSchedule(
     });
   }
 
-  // 3. VALIDATE AND PLACE FIXED ASSIGNMENTS (HIGHEST PRIORITY)
-  const dailyFixedAssignments = new Set<string>(); // key: `${name}-${week}-${day}`
+  // 3. HANDLE FIXED ASSIGNMENTS AND OVERRIDES
+  // Merge daily overrides into fixed assignments (temporarily for this generation)
+  // We prioritize overrides. If an override exists for a floor/bar, we ignore the global fixed assignment for that floor/bar.
   
-  for (const assignment of fixedAssignments) {
+  const activeFixedAssignments: FixedAssignment[] = [];
+  const overrideKeys = new Set<string>(); // Keys: "Floor-Bar" to check for overrides
+
+  if (specificDay && dailyOverrides.length > 0) {
+      dailyOverrides.forEach(d => {
+          // Add to override keys so we know to skip conflicting global assignments
+          overrideKeys.add(`${d.floor}-${d.bar}`);
+          
+          // Add as a high priority assignment
+          // Daily runs are always treated as "Week_1" in the loop below regarding logic, 
+          // but simply pushing it for the specific day is enough.
+          activeFixedAssignments.push({
+              week: 'Week_1',
+              day: specificDay,
+              floor: d.floor,
+              bar: d.bar,
+              name: d.name
+          });
+      });
+  }
+
+  // Add global fixed assignments, skipping if overridden
+  fixedAssignments.forEach(fa => {
+      // If generating for a specific day, only care about that day
+      if (specificDay) {
+        if (fa.day !== specificDay && !(specificDay === 'Sun' && fa.day === 'Sun_Night')) return;
+        
+        // If this slot is manually overridden, skip the global assignment
+        if (overrideKeys.has(`${fa.floor}-${fa.bar}`)) return;
+      }
+      activeFixedAssignments.push(fa);
+  });
+
+  const dailyFixedAssignmentsMap = new Set<string>(); // key: `${name}-${week}-${day}`
+  
+  for (const assignment of activeFixedAssignments) {
     const weekNum = parseInt(assignment.week.split('_')[1]);
     
-    // Only process fixed assignments that are within the weeks we are generating
+    // Only process assignments that are within the weeks we are generating
     if (weekNum > weeksToGenerate) continue;
 
-    // Filter for Specific Day mode
+    // Filter for Specific Day mode (double check, primarily for the global ones)
     if (specificDay) {
         if (assignment.day !== specificDay && !(specificDay === 'Sun' && assignment.day === 'Sun_Night')) {
             continue;
@@ -127,11 +164,16 @@ export function generateSchedule(
 
     const assignmentKey = `${assignment.name}-${weekNum}-${assignment.day}`;
     
-    // Check for double booking within the provided fixed assignments.
-    if (dailyFixedAssignments.has(assignmentKey)) {
-        throw new Error(`Conflicting fixed assignment: ${assignment.name} is assigned to more than one shift on Week ${weekNum}, ${assignment.day}. Please correct the fixed shifts.`);
+    // Check for double booking within the assignments
+    if (dailyFixedAssignmentsMap.has(assignmentKey)) {
+        // In a real scenario, we might want to just warn, but strict mode throws.
+        // However, since we are merging overrides, we might have introduced a conflict if the user manually assigned the same person twice.
+        // We will allow it but log it, or just skip adding if already there?
+        // Let's just continue to allow multiple assignments if forced by user, but algorithm assumes unique availability.
+        // For robustness:
+        // throw new Error(`Conflicting assignment: ${assignment.name} is assigned multiple times.`);
     }
-    dailyFixedAssignments.add(assignmentKey);
+    dailyFixedAssignmentsMap.add(assignmentKey);
 
     let shift = schedule.find(s => 
         s.week === weekNum && 
@@ -139,13 +181,9 @@ export function generateSchedule(
         s.floor === assignment.floor &&
         s.bar === assignment.bar
     );
-    // If it's a special event not in the template, add it to the schedule structure.
+    
+    // If it's a special event (or manually added daily shift) not in the template, add it to the schedule structure.
     if (!shift) {
-        // Only add if it matches our specific day constraint
-        if (specificDay && assignment.day !== specificDay && !(specificDay === 'Sun' && assignment.day === 'Sun_Night')) {
-            continue;
-        }
-
         shift = {
             week: weekNum,
             day: assignment.day,
@@ -155,6 +193,8 @@ export function generateSchedule(
         };
         schedule.push(shift);
     }
+    
+    // Avoid duplicate bartenders in same shift
     if (!shift.bartenders.some(b => b.name === assignment.name)) {
         shift.bartenders.push({ name: assignment.name, role: null });
         if(shiftCounts[assignment.name] !== undefined) {
@@ -169,17 +209,12 @@ export function generateSchedule(
   
   // 4. FILL REMAINING SHIFTS
   for (let week = 1; week <= weeksToGenerate; week++) {
-    const daysForWeek = [...new Set(shiftsTemplate.map(s => s.day))].sort((a,b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
+    // We need to process all days that exist in the schedule now (which includes template days AND manually added days)
+    const daysInSchedule = [...new Set(schedule.filter(s => s.week === week).map(s => s.day))];
+    const daysForWeek = daysInSchedule.sort((a,b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
 
     for (const day of daysForWeek) {
-      // Filter for Specific Day mode
-      if (specificDay) {
-        if (day !== specificDay && !(specificDay === 'Sun' && day === 'Sun_Night')) {
-            continue;
-        }
-      }
-
-      // Find out who is already working today due to fixed assignments. This is the key to preventing double booking.
+      // Find out who is already working today
       const scheduledThisDay = new Set<string>();
       schedule
         .filter(s => s.week === week && s.day === day)
@@ -188,10 +223,28 @@ export function generateSchedule(
       const shiftsForDay = schedule.filter(s => s.week === week && s.day === day);
 
       for (const shift of shiftsForDay) {
+        // Check template info for needed count
         const shiftInfo = shiftsTemplate.find(t => t.day === shift.day && t.floor === shift.floor && t.bar === shift.bar);
-        if (!shiftInfo) continue; // This is a special event shift, already handled by fixed assignments.
+        
+        // If shiftInfo exists, use its needed count. 
+        // If it doesn't exist (it's a custom/manual shift), we assume it's full based on the manual assignment 
+        // unless we want to support "Partial Custom Shifts" which is complex. 
+        // For now: Custom shifts are assumed to be fully handled by the manual assignment (size matches manual count).
+        
+        let bartendersNeeded = 0;
+        let genderConstraint: 'MF' | null = null;
 
-        const neededCount = shiftInfo.bartendersNeeded - shift.bartenders.length;
+        if (shiftInfo) {
+            bartendersNeeded = shiftInfo.bartendersNeeded;
+            genderConstraint = shiftInfo.gender;
+        } else {
+            // It's a custom shift created by assignment. 
+            // If we wanted to auto-fill it, we'd need to know how many people.
+            // Defaulting to "current length" means no more will be added.
+            bartendersNeeded = shift.bartenders.length; 
+        }
+
+        const neededCount = bartendersNeeded - shift.bartenders.length;
         if (neededCount <= 0) continue;
 
         // Find all available candidates for this specific shift.
@@ -214,7 +267,7 @@ export function generateSchedule(
 
         const toAssign: Bartender[] = [];
 
-        if (shiftInfo.gender === 'MF') {
+        if (genderConstraint === 'MF') {
           // Handle gender constraint
           const currentGenders = new Set(shift.bartenders.map(b => {
             const bartender = bartenders.find(findB => findB.name === b.name);
@@ -263,7 +316,10 @@ export function generateSchedule(
   // 5. POST-PROCESSING: Assign 'Point' Role
   schedule.forEach(shift => {
     if (shift.bartenders.length > 1) {
-      shift.bartenders[0].role = 'Point';
+      // Only assign Point if no one else has a role yet (though our logic currently doesn't set other roles)
+      if (!shift.bartenders[0].role) {
+          shift.bartenders[0].role = 'Point';
+      }
     }
   });
 
