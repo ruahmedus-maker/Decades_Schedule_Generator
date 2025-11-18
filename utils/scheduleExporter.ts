@@ -59,6 +59,48 @@ function generateSummarySection(schedule: Schedule, bartenders: Bartender[], ear
     return html;
 }
 
+function generateFloorDistributionSection(schedule: Schedule, bartenders: Bartender[]): string {
+    const data: Record<string, Record<string, number>> = bartenders.reduce((acc, b) => {
+        acc[b.name] = {};
+        FLOOR_ORDER.forEach(floor => {
+            acc[b.name][floor] = 0;
+        });
+        return acc;
+    }, {} as Record<string, Record<string, number>>);
+
+    schedule.forEach(entry => {
+        const { floor, bartenders: assigned } = entry;
+        assigned.forEach(b => {
+            if (data[b.name] && data[b.name][floor] !== undefined) {
+                data[b.name][floor]++;
+            }
+        });
+    });
+
+    const sortedNames = Object.keys(data).sort((a, b) => a.localeCompare(b));
+
+    let html = `<div class="section">
+        <h2 class="section-title">📍 Floor Distribution</h2>
+        <table class="summary-table">
+            <thead>
+                <tr>
+                    <th>Bartender</th>
+                    ${FLOOR_ORDER.map(f => `<th>${f}</th>`).join('')}
+                </tr>
+            </thead>
+            <tbody>`;
+
+    sortedNames.forEach(name => {
+        html += `<tr>
+            <td><strong>${name}</strong></td>
+            ${FLOOR_ORDER.map(f => `<td style="text-align:center;">${data[name][f]}</td>`).join('')}
+        </tr>`;
+    });
+
+    html += `</tbody></table></div><hr style="border: 0; border-top: 2px solid #eee; margin: 30px 0;">`;
+    return html;
+}
+
 function generateWeeklySections(schedule: Schedule): string {
     let html = `<div class="section">
         <h2 class="section-title">🗓️ Weekly Schedules</h2>`;
@@ -166,6 +208,7 @@ export function exportScheduleToHtml(schedule: Schedule, title: string, bartende
             <p>${title}<br><small>(Note: Shift cells in the weekly schedule are editable for minor adjustments)</small></p>
         </div>
         ${generateSummarySection(schedule, bartenders, earningsMap)}
+        ${generateFloorDistributionSection(schedule, bartenders)}
         ${generateWeeklySections(schedule)}
       </div>
     </body>
