@@ -72,7 +72,8 @@ export function generateSchedule(
     targetShifts: TargetShifts,
     timeOffRequests: TimeOffRequest[],
     closedShifts: ClosedShift[],
-    weeksToGenerate: number = 4
+    weeksToGenerate: number = 4,
+    specificDay?: DayOfWeek
 ): Schedule {
   
   // 1. INITIALIZATION
@@ -87,6 +88,14 @@ export function generateSchedule(
   for (let week = 1; week <= weeksToGenerate; week++) {
     const weekString = `Week_${week}` as const;
     shiftsTemplate.forEach(shift => {
+      // If specificDay is set, skip shifts that don't match.
+      // Special case: If specificDay is 'Sun', allow 'Sun_Night' as well.
+      if (specificDay) {
+        if (shift.day !== specificDay && !(specificDay === 'Sun' && shift.day === 'Sun_Night')) {
+            return;
+        }
+      }
+
       const shiftIdentifier = `${weekString}-${shift.day}-${shift.floor}-${shift.bar}`;
       if (!closedShiftsSet.has(shiftIdentifier)) {
           schedule.push({
@@ -109,6 +118,13 @@ export function generateSchedule(
     // Only process fixed assignments that are within the weeks we are generating
     if (weekNum > weeksToGenerate) continue;
 
+    // Filter for Specific Day mode
+    if (specificDay) {
+        if (assignment.day !== specificDay && !(specificDay === 'Sun' && assignment.day === 'Sun_Night')) {
+            continue;
+        }
+    }
+
     const assignmentKey = `${assignment.name}-${weekNum}-${assignment.day}`;
     
     // Check for double booking within the provided fixed assignments.
@@ -125,6 +141,11 @@ export function generateSchedule(
     );
     // If it's a special event not in the template, add it to the schedule structure.
     if (!shift) {
+        // Only add if it matches our specific day constraint
+        if (specificDay && assignment.day !== specificDay && !(specificDay === 'Sun' && assignment.day === 'Sun_Night')) {
+            continue;
+        }
+
         shift = {
             week: weekNum,
             day: assignment.day,
@@ -151,6 +172,13 @@ export function generateSchedule(
     const daysForWeek = [...new Set(shiftsTemplate.map(s => s.day))].sort((a,b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
 
     for (const day of daysForWeek) {
+      // Filter for Specific Day mode
+      if (specificDay) {
+        if (day !== specificDay && !(specificDay === 'Sun' && day === 'Sun_Night')) {
+            continue;
+        }
+      }
+
       // Find out who is already working today due to fixed assignments. This is the key to preventing double booking.
       const scheduledThisDay = new Set<string>();
       schedule
@@ -233,7 +261,6 @@ export function generateSchedule(
   }
 
   // 5. POST-PROCESSING: Assign 'Point' Role
-  // Rule: "one position per bar that requires more than one bartender should in the point position"
   schedule.forEach(shift => {
     if (shift.bartenders.length > 1) {
       shift.bartenders[0].role = 'Point';

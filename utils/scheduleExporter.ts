@@ -145,7 +145,10 @@ function generateWeeklySections(schedule: Schedule, startDate?: string): string 
             return barA.localeCompare(barB);
         });
 
-        const title = startDate && i === 1 ? `Weekly Schedule (Week of ${new Date(startDate).toLocaleDateString()})` : `Week ${i}`;
+        let title = `Week ${i}`;
+        if (startDate && i === 1) {
+            title = `Weekly Schedule (Week of ${new Date(startDate).toLocaleDateString()})`;
+        }
 
         html += `<div class="week-table">
             <h3 class="week-title">${title}</h3>

@@ -1,5 +1,6 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
-import type { Schedule, Bartender, FixedAssignment, TargetShifts, TimeOffRequest, ClosedShift } from './types';
+import type { Schedule, Bartender, FixedAssignment, TargetShifts, TimeOffRequest, ClosedShift, DayOfWeek } from './types';
 import { BARTENDERS as initialBartenders, SHIFTS_TEMPLATE, FIXED_ASSIGNMENTS as initialFixedAssignments, EARNINGS_MAP } from './data';
 import { generateSchedule } from './services/schedulingAlgorithm';
 import { exportScheduleToHtml } from './utils/scheduleExporter';
@@ -68,7 +69,7 @@ const App: React.FC = () => {
   });
 
   // --- New State for Mode and Date ---
-  const [generationMode, setGenerationMode] = useState<'monthly' | 'weekly'>('monthly');
+  const [generationMode, setGenerationMode] = useState<'monthly' | 'weekly' | 'daily'>('monthly');
   const [startDate, setStartDate] = useState<string>(() => {
     // Default to next Monday
     const d = new Date();
@@ -128,6 +129,7 @@ const App: React.FC = () => {
       const newTargets: TargetShifts = {};
       // Adjust average shifts based on mode (Monthly approx 10-12, Weekly approx 3-4)
       const weeks = generationMode === 'monthly' ? 4 : 1;
+      // Scale approximate total slots based on number of weeks
       const totalSlots = SHIFTS_TEMPLATE.length * weeks * 1.5; 
       const averageShifts = Math.floor(totalSlots / bartenders.length) || (weeks * 3);
       
@@ -138,6 +140,13 @@ const App: React.FC = () => {
     });
   }, [bartenders, generationMode]);
 
+  // Helper to get the Monday of the current date's week
+  const getMonday = (d: Date) => {
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+    return new Date(d.setDate(diff));
+  }
+
   const handleGenerateSchedule = useCallback(() => {
     setIsLoading(true);
     setError(null);
@@ -146,6 +155,16 @@ const App: React.FC = () => {
     setTimeout(() => {
       try {
         const weeksToGenerate = generationMode === 'monthly' ? 4 : 1;
+        let specificDay: DayOfWeek | undefined = undefined;
+        
+        // Logic to handle specific day generation
+        if (generationMode === 'daily') {
+            const d = new Date(startDate + 'T00:00:00'); // Force local time
+            const dayIndex = d.getDay(); // 0 = Sun, 1 = Mon ...
+            const dayMap: DayOfWeek[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            specificDay = dayMap[dayIndex];
+        }
+
         const generatedSchedule = generateSchedule(
             bartenders, 
             SHIFTS_TEMPLATE, 
@@ -153,7 +172,8 @@ const App: React.FC = () => {
             targetShifts, 
             timeOffRequests, 
             closedShifts,
-            weeksToGenerate
+            weeksToGenerate,
+            specificDay
         );
         setSchedule(generatedSchedule);
       } catch (err) {
@@ -163,20 +183,33 @@ const App: React.FC = () => {
         setIsLoading(false);
       }
     }, 50);
-  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode]);
+  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode, startDate]);
   
   const getScheduleTitle = () => {
     if (generationMode === 'monthly') {
         return new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
     }
     if (startDate) {
-        const dateObj = new Date(startDate);
+        const dateObj = new Date(startDate + 'T00:00:00');
+        if (generationMode === 'daily') {
+            return dateObj.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+        }
         return `Week of ${dateObj.toLocaleDateString()}`;
     }
     return 'Weekly Schedule';
   };
 
+  const getEffectiveMondayDate = () => {
+    if (generationMode === 'monthly' || !startDate) return undefined;
+    // If daily or weekly, we want to pass the Monday of that week to ScheduleView
+    // so it calculates header dates correctly (since ScheduleView assumes StartDate is a Monday)
+    const d = new Date(startDate + 'T00:00:00');
+    const monday = getMonday(d);
+    return monday.toISOString().split('T')[0];
+  };
+
   const scheduleTitle = getScheduleTitle();
+  const effectiveStartDate = getEffectiveMondayDate();
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-200 font-sans p-4 sm:p-6 lg:p-8">
@@ -200,21 +233,29 @@ const App: React.FC = () => {
                 <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-600">
                     <button
                         onClick={() => setGenerationMode('monthly')}
-                        className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${generationMode === 'monthly' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                        className={`flex-1 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors ${generationMode === 'monthly' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
                     >
-                        Monthly (4 Weeks)
+                        Monthly
                     </button>
                     <button
                         onClick={() => setGenerationMode('weekly')}
-                        className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${generationMode === 'weekly' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                        className={`flex-1 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors ${generationMode === 'weekly' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
                     >
-                        Single Week
+                        1 Week
+                    </button>
+                    <button
+                        onClick={() => setGenerationMode('daily')}
+                        className={`flex-1 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors ${generationMode === 'daily' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                        1 Day
                     </button>
                 </div>
                 
-                {generationMode === 'weekly' && (
+                {(generationMode === 'weekly' || generationMode === 'daily') && (
                     <div className="mt-3 animate-fadeIn">
-                        <label className="block text-xs text-slate-400 mb-1">Week Starting (Monday)</label>
+                        <label className="block text-xs text-slate-400 mb-1">
+                            {generationMode === 'weekly' ? 'Week Starting (Monday)' : 'Select Date'}
+                        </label>
                         <div className="relative">
                             <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none"/>
                             <input 
@@ -270,7 +311,7 @@ const App: React.FC = () => {
                 ) : (
                   <>
                     <CalendarIcon className="h-5 w-5" />
-                    Generate {generationMode === 'monthly' ? '4-Week' : '1-Week'} Schedule
+                    Generate Schedule
                   </>
                 )}
               </button>
@@ -280,7 +321,10 @@ const App: React.FC = () => {
           {/* Schedule Display Section */}
           <section className="xl:col-span-3 p-6 bg-slate-800/50 rounded-2xl border border-slate-700 shadow-lg">
             <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
-              <h2 className="text-2xl font-bold text-white">Schedule for {scheduleTitle}</h2>
+              <h2 className="text-2xl font-bold text-white">
+                {generationMode === 'daily' ? 'Daily Schedule' : 'Schedule'} 
+                <span className="text-indigo-400 ml-2 text-lg font-normal">({scheduleTitle})</span>
+              </h2>
               {schedule && schedule.length > 0 && (
                 <button
                   onClick={() => exportScheduleToHtml(
@@ -288,7 +332,7 @@ const App: React.FC = () => {
                       scheduleTitle, 
                       bartenders, 
                       EARNINGS_MAP, 
-                      generationMode === 'weekly' ? startDate : undefined
+                      effectiveStartDate
                   )}
                   className="flex items-center justify-center sm:justify-start gap-2 bg-slate-700 text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-slate-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-slate-500"
                 >
@@ -311,7 +355,7 @@ const App: React.FC = () => {
                   <FloorDistributionView schedule={schedule} bartenders={bartenders} />
                   <ScheduleView 
                     schedule={schedule} 
-                    startDate={generationMode === 'weekly' ? startDate : undefined}
+                    startDate={effectiveStartDate}
                   />
                 </>
               ) : (

@@ -59,6 +59,8 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate }) => {
             }
             return barA.localeCompare(barB);
         });
+        
+        if (uniqueKeys.length === 0) return null;
 
         return (
           <div key={week}>
