@@ -67,6 +67,15 @@ const App: React.FC = () => {
     }
   });
 
+  // --- New State for Mode and Date ---
+  const [generationMode, setGenerationMode] = useState<'monthly' | 'weekly'>('monthly');
+  const [startDate, setStartDate] = useState<string>(() => {
+    // Default to next Monday
+    const d = new Date();
+    d.setDate(d.getDate() + (1 + 7 - d.getDay()) % 7);
+    return d.toISOString().split('T')[0];
+  });
+
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,39 +124,59 @@ const App: React.FC = () => {
   // --- Logic Effects ---
   useEffect(() => {
     // Sync target shifts with the main bartender list.
-    // This adds new bartenders with a default target and removes bartenders who are no longer in the roster.
     setTargetShifts(prevTargets => {
       const newTargets: TargetShifts = {};
-      const averageShifts = Math.floor(SHIFTS_TEMPLATE.length * 4 * 1.5 / bartenders.length) || 10;
+      // Adjust average shifts based on mode (Monthly approx 10-12, Weekly approx 3-4)
+      const weeks = generationMode === 'monthly' ? 4 : 1;
+      const totalSlots = SHIFTS_TEMPLATE.length * weeks * 1.5; 
+      const averageShifts = Math.floor(totalSlots / bartenders.length) || (weeks * 3);
       
       bartenders.forEach(b => {
-        // If a target already exists (e.g., from localStorage), use it. Otherwise, set a default.
         newTargets[b.name] = prevTargets[b.name] !== undefined ? prevTargets[b.name] : averageShifts;
       });
       return newTargets;
     });
-  }, [bartenders]);
+  }, [bartenders, generationMode]);
 
   const handleGenerateSchedule = useCallback(() => {
     setIsLoading(true);
     setError(null);
     setSchedule(null);
 
-    // Use a timeout to allow the UI to update to the loading state before the potentially blocking calculation starts.
     setTimeout(() => {
       try {
-        const generatedSchedule = generateSchedule(bartenders, SHIFTS_TEMPLATE, fixedAssignments, targetShifts, timeOffRequests, closedShifts);
+        const weeksToGenerate = generationMode === 'monthly' ? 4 : 1;
+        const generatedSchedule = generateSchedule(
+            bartenders, 
+            SHIFTS_TEMPLATE, 
+            fixedAssignments, 
+            targetShifts, 
+            timeOffRequests, 
+            closedShifts,
+            weeksToGenerate
+        );
         setSchedule(generatedSchedule);
       } catch (err) {
         console.error(err);
-        setError(err instanceof Error ? err.message : 'An unknown error occurred while generating the schedule. This could be due to impossible constraints (e.g., not enough staff for required shifts).');
+        setError(err instanceof Error ? err.message : 'An unknown error occurred while generating the schedule.');
       } finally {
         setIsLoading(false);
       }
     }, 50);
-  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts]);
+  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode]);
   
-  const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+  const getScheduleTitle = () => {
+    if (generationMode === 'monthly') {
+        return new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+    }
+    if (startDate) {
+        const dateObj = new Date(startDate);
+        return `Week of ${dateObj.toLocaleDateString()}`;
+    }
+    return 'Weekly Schedule';
+  };
+
+  const scheduleTitle = getScheduleTitle();
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-200 font-sans p-4 sm:p-6 lg:p-8">
@@ -157,13 +186,48 @@ const App: React.FC = () => {
             AI Bartender Schedule Generator
           </h1>
           <p className="mt-2 text-lg text-slate-400">
-            Intelligent 4-week scheduling based on your club's specific rules.
+            Intelligent scheduling based on your club's specific rules.
           </p>
         </header>
 
         <main className="grid grid-cols-1 xl:grid-cols-4 xl:items-start gap-8">
           {/* Controls Section */}
           <aside className="xl:col-span-1 space-y-8 p-6 bg-slate-800/50 rounded-2xl border border-slate-700 shadow-lg xl:sticky xl:top-8">
+            
+            {/* Mode Selection */}
+            <div className="space-y-3 border-b border-slate-700 pb-6">
+                <h3 className="text-base font-semibold text-slate-200">Schedule Mode</h3>
+                <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-600">
+                    <button
+                        onClick={() => setGenerationMode('monthly')}
+                        className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${generationMode === 'monthly' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                        Monthly (4 Weeks)
+                    </button>
+                    <button
+                        onClick={() => setGenerationMode('weekly')}
+                        className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${generationMode === 'weekly' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                        Single Week
+                    </button>
+                </div>
+                
+                {generationMode === 'weekly' && (
+                    <div className="mt-3 animate-fadeIn">
+                        <label className="block text-xs text-slate-400 mb-1">Week Starting (Monday)</label>
+                        <div className="relative">
+                            <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none"/>
+                            <input 
+                                type="date" 
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="w-full bg-slate-900/70 border border-slate-600 rounded-md py-2 pl-9 pr-3 text-sm text-slate-200 focus:ring-1 focus:ring-indigo-500"
+                            />
+                        </div>
+                    </div>
+                )}
+            </div>
+
             <BartenderManager bartenders={bartenders} setBartenders={setBartenders} />
             
             <WeeklyAvailabilityManager bartenders={bartenders} setBartenders={setBartenders} />
@@ -206,7 +270,7 @@ const App: React.FC = () => {
                 ) : (
                   <>
                     <CalendarIcon className="h-5 w-5" />
-                    Generate 4-Week Schedule
+                    Generate {generationMode === 'monthly' ? '4-Week' : '1-Week'} Schedule
                   </>
                 )}
               </button>
@@ -216,10 +280,16 @@ const App: React.FC = () => {
           {/* Schedule Display Section */}
           <section className="xl:col-span-3 p-6 bg-slate-800/50 rounded-2xl border border-slate-700 shadow-lg">
             <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
-              <h2 className="text-2xl font-bold text-white">Schedule for {currentMonth}</h2>
+              <h2 className="text-2xl font-bold text-white">Schedule for {scheduleTitle}</h2>
               {schedule && schedule.length > 0 && (
                 <button
-                  onClick={() => exportScheduleToHtml(schedule, currentMonth, bartenders, EARNINGS_MAP)}
+                  onClick={() => exportScheduleToHtml(
+                      schedule, 
+                      scheduleTitle, 
+                      bartenders, 
+                      EARNINGS_MAP, 
+                      generationMode === 'weekly' ? startDate : undefined
+                  )}
                   className="flex items-center justify-center sm:justify-start gap-2 bg-slate-700 text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-slate-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-slate-500"
                 >
                   <DownloadIcon className="h-5 w-5" />
@@ -239,14 +309,17 @@ const App: React.FC = () => {
                 <>
                   <SummaryView schedule={schedule} bartenders={bartenders} earningsMap={EARNINGS_MAP} />
                   <FloorDistributionView schedule={schedule} bartenders={bartenders} />
-                  <ScheduleView schedule={schedule} />
+                  <ScheduleView 
+                    schedule={schedule} 
+                    startDate={generationMode === 'weekly' ? startDate : undefined}
+                  />
                 </>
               ) : (
                  !isLoading && !error && (
                   <div className="flex flex-col items-center justify-center min-h-[60vh] text-center text-slate-500 border-2 border-dashed border-slate-700 rounded-lg">
                       <CalendarIcon className="h-16 w-16 mb-4 text-slate-600"/>
                       <p className="text-lg font-semibold">Your generated schedule will appear here.</p>
-                      <p>Click "Generate 4-Week Schedule" to begin.</p>
+                      <p>Click "Generate Schedule" to begin.</p>
                   </div>
                  )
               )}

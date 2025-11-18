@@ -71,7 +71,8 @@ export function generateSchedule(
     fixedAssignments: FixedAssignment[],
     targetShifts: TargetShifts,
     timeOffRequests: TimeOffRequest[],
-    closedShifts: ClosedShift[]
+    closedShifts: ClosedShift[],
+    weeksToGenerate: number = 4
 ): Schedule {
   
   // 1. INITIALIZATION
@@ -83,7 +84,7 @@ export function generateSchedule(
 
 
   // 2. CREATE EMPTY SCHEDULE STRUCTURE based on template, excluding closed shifts
-  for (let week = 1; week <= 4; week++) {
+  for (let week = 1; week <= weeksToGenerate; week++) {
     const weekString = `Week_${week}` as const;
     shiftsTemplate.forEach(shift => {
       const shiftIdentifier = `${weekString}-${shift.day}-${shift.floor}-${shift.bar}`;
@@ -104,6 +105,10 @@ export function generateSchedule(
   
   for (const assignment of fixedAssignments) {
     const weekNum = parseInt(assignment.week.split('_')[1]);
+    
+    // Only process fixed assignments that are within the weeks we are generating
+    if (weekNum > weeksToGenerate) continue;
+
     const assignmentKey = `${assignment.name}-${weekNum}-${assignment.day}`;
     
     // Check for double booking within the provided fixed assignments.
@@ -142,7 +147,7 @@ export function generateSchedule(
   }
   
   // 4. FILL REMAINING SHIFTS
-  for (let week = 1; week <= 4; week++) {
+  for (let week = 1; week <= weeksToGenerate; week++) {
     const daysForWeek = [...new Set(shiftsTemplate.map(s => s.day))].sort((a,b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
 
     for (const day of daysForWeek) {
@@ -229,10 +234,8 @@ export function generateSchedule(
 
   // 5. POST-PROCESSING: Assign 'Point' Role
   // Rule: "one position per bar that requires more than one bartender should in the point position"
-  // We assign 'Point' to the first bartender listed in any shift with > 1 bartender.
   schedule.forEach(shift => {
     if (shift.bartenders.length > 1) {
-      // Since fixed assignments are added first, they naturally take the Point position if present.
       shift.bartenders[0].role = 'Point';
     }
   });

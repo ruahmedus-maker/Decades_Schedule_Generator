@@ -34,7 +34,7 @@ function generateSummarySection(schedule: Schedule, bartenders: Bartender[], ear
     })).sort((a, b) => a.name.localeCompare(b.name));
 
     let html = `<div class="section">
-        <h2 class="section-title">📊 Monthly Summary</h2>
+        <h2 class="section-title">📊 Summary</h2>
         <table class="summary-table">
             <thead>
                 <tr>
@@ -101,9 +101,20 @@ function generateFloorDistributionSection(schedule: Schedule, bartenders: Barten
     return html;
 }
 
-function generateWeeklySections(schedule: Schedule): string {
+function getFormattedDate(start: string, day: DayOfWeek) {
+    const date = new Date(start);
+    // Assumes startDate is the Monday of the week.
+    const dayIndex = DAY_ORDER.indexOf(day);
+    // Map Sun_Night to Sunday date
+    const offset = dayIndex === 7 ? 6 : dayIndex; 
+    
+    date.setDate(date.getDate() + offset);
+    return `${day.replace('_', ' ')} ${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function generateWeeklySections(schedule: Schedule, startDate?: string): string {
     let html = `<div class="section">
-        <h2 class="section-title">🗓️ Weekly Schedules</h2>`;
+        <h2 class="section-title">🗓️ Schedule</h2>`;
 
     for (let i = 1; i <= 4; i++) {
         const weekSchedule = getWeekData(schedule, i);
@@ -134,13 +145,18 @@ function generateWeeklySections(schedule: Schedule): string {
             return barA.localeCompare(barB);
         });
 
+        const title = startDate && i === 1 ? `Weekly Schedule (Week of ${new Date(startDate).toLocaleDateString()})` : `Week ${i}`;
+
         html += `<div class="week-table">
-            <h3 class="week-title">Week ${i}</h3>
+            <h3 class="week-title">${title}</h3>
             <table>
                 <thead>
                     <tr>
                         <th>Shift (Floor / Bar)</th>
-                        ${daysInWeek.map(d => `<th>${d.replace('_', ' ')}</th>`).join('')}
+                        ${daysInWeek.map(d => {
+                            const label = (startDate && i === 1) ? getFormattedDate(startDate, d) : d.replace('_', ' ');
+                            return `<th>${label}</th>`;
+                        }).join('')}
                     </tr>
                 </thead>
                 <tbody>`;
@@ -165,7 +181,7 @@ function generateWeeklySections(schedule: Schedule): string {
     return html;
 }
 
-export function exportScheduleToHtml(schedule: Schedule, title: string, bartenders: Bartender[], earningsMap: EarningsMap) {
+export function exportScheduleToHtml(schedule: Schedule, title: string, bartenders: Bartender[], earningsMap: EarningsMap, startDate?: string) {
   const htmlContent = `
     <!DOCTYPE html>
     <html lang="en">
@@ -209,7 +225,7 @@ export function exportScheduleToHtml(schedule: Schedule, title: string, bartende
         </div>
         ${generateSummarySection(schedule, bartenders, earningsMap)}
         ${generateFloorDistributionSection(schedule, bartenders)}
-        ${generateWeeklySections(schedule)}
+        ${generateWeeklySections(schedule, startDate)}
       </div>
     </body>
     </html>
@@ -218,7 +234,7 @@ export function exportScheduleToHtml(schedule: Schedule, title: string, bartende
   const blob = new Blob([htmlContent], { type: 'text/html' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
-  link.download = `schedule-report-${title.replace(/\s+/g, '-')}.html`;
+  link.download = `schedule-report-${title.replace(/[\s/]+/g, '-')}.html`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
