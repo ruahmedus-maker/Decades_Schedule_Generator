@@ -1,4 +1,5 @@
-import type { Schedule, DayOfWeek, Bartender, EarningsMap } from '../types';
+
+import type { Schedule, DayOfWeek, Bartender, EarningsMap, ScheduledBartender } from '../types';
 
 function getWeekData(schedule: Schedule, week: number) {
     return schedule.filter(s => s.week === week);
@@ -15,7 +16,8 @@ function generateSummarySection(schedule: Schedule, bartenders: Bartender[], ear
         const { floor, bar, day, bartenders: assigned } = entry;
         const earnings = earningsMap[floor]?.[bar]?.[day] || 0;
         
-        assigned.forEach(name => {
+        assigned.forEach(b => {
+            const name = b.name;
             if (!summary[name]) {
                  summary[name] = { shiftCount: 0, totalEarnings: 0 };
             }
@@ -65,7 +67,7 @@ function generateWeeklySections(schedule: Schedule): string {
         const weekSchedule = getWeekData(schedule, i);
         if (weekSchedule.length === 0) continue;
 
-        const scheduleGrid: Record<string, Record<string, string[]>> = {};
+        const scheduleGrid: Record<string, Record<string, ScheduledBartender[]>> = {};
         
         const daysInWeek = Array.from(new Set(weekSchedule.map(entry => entry.day)))
                                  .sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
@@ -108,7 +110,8 @@ function generateWeeklySections(schedule: Schedule): string {
                 <td><strong>${floor}</strong><br><span class="bar-name">${bar}</span></td>`;
             daysInWeek.forEach(day => {
                 const bartenders = scheduleGrid[key][day] || [];
-                html += `<td contenteditable="true" class="editable-cell">${bartenders.join('<br>')}</td>`;
+                const bartenderStrings = bartenders.map(b => b.role ? `${b.name} (${b.role})` : b.name);
+                html += `<td contenteditable="true" class="editable-cell">${bartenderStrings.join('<br>')}</td>`;
             });
             html += `</tr>`;
         });

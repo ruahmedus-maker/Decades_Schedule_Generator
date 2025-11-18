@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import type { Schedule, Bartender } from '../types';
 
@@ -20,9 +21,9 @@ const FloorDistributionView: React.FC<FloorDistributionViewProps> = ({ schedule,
 
     schedule.forEach(entry => {
       const { floor, bartenders: assigned } = entry;
-      assigned.forEach(name => {
-        if (data[name] && data[name][floor] !== undefined) {
-          data[name][floor]++;
+      assigned.forEach(b => {
+        if (data[b.name] && data[b.name][floor] !== undefined) {
+          data[b.name][floor]++;
         }
       });
     });

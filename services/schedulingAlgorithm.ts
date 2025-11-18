@@ -1,4 +1,5 @@
-import type { Schedule, Bartender, Shift, FixedAssignment, TargetShifts, TimeOffRequest, DayOfWeek, ClosedShift } from '../types';
+
+import type { Schedule, Bartender, Shift, FixedAssignment, TargetShifts, TimeOffRequest, DayOfWeek, ClosedShift, ScheduledBartender } from '../types';
 
 const DAY_ORDER: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Sun_Night'];
 
@@ -128,8 +129,8 @@ export function generateSchedule(
         };
         schedule.push(shift);
     }
-    if (!shift.bartenders.includes(assignment.name)) {
-        shift.bartenders.push(assignment.name);
+    if (!shift.bartenders.some(b => b.name === assignment.name)) {
+        shift.bartenders.push({ name: assignment.name, role: null });
         if(shiftCounts[assignment.name] !== undefined) {
           shiftCounts[assignment.name]++;
         }
@@ -149,7 +150,7 @@ export function generateSchedule(
       const scheduledThisDay = new Set<string>();
       schedule
         .filter(s => s.week === week && s.day === day)
-        .forEach(s => s.bartenders.forEach(b => scheduledThisDay.add(b)));
+        .forEach(s => s.bartenders.forEach(b => scheduledThisDay.add(b.name)));
       
       const shiftsForDay = schedule.filter(s => s.week === week && s.day === day);
 
@@ -182,7 +183,10 @@ export function generateSchedule(
 
         if (shiftInfo.gender === 'MF') {
           // Handle gender constraint
-          const currentGenders = new Set(shift.bartenders.map(name => bartenders.find(b=>b.name===name)?.gender));
+          const currentGenders = new Set(shift.bartenders.map(b => {
+            const bartender = bartenders.find(findB => findB.name === b.name);
+            return bartender?.gender;
+          }));
           const needsMale = !currentGenders.has('Male');
           const needsFemale = !currentGenders.has('Female');
           
@@ -209,7 +213,7 @@ export function generateSchedule(
         // Assign the chosen bartenders and update their counts for subsequent calculations.
         for (const bartender of toAssign) {
           if (bartender) {
-            shift.bartenders.push(bartender.name);
+            shift.bartenders.push({ name: bartender.name, role: null });
             shiftCounts[bartender.name]++;
             scheduledThisDay.add(bartender.name);
 
@@ -222,6 +226,16 @@ export function generateSchedule(
       }
     }
   }
+
+  // 5. POST-PROCESSING: Assign 'Point' Role
+  // Rule: "one position per bar that requires more than one bartender should in the point position"
+  // We assign 'Point' to the first bartender listed in any shift with > 1 bartender.
+  schedule.forEach(shift => {
+    if (shift.bartenders.length > 1) {
+      // Since fixed assignments are added first, they naturally take the Point position if present.
+      shift.bartenders[0].role = 'Point';
+    }
+  });
 
   // Sort final schedule for consistent display
   schedule.sort((a,b) => {

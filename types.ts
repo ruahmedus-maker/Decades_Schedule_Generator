@@ -1,3 +1,4 @@
+
 export type DayOfWeek = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun' | 'Sun_Night';
 
 export interface Bartender {
@@ -31,12 +32,17 @@ export interface ClosedShift {
   bar: string;
 }
 
+export interface ScheduledBartender {
+  name: string;
+  role?: string | null;
+}
+
 export interface ScheduleEntry {
   week: number;
   day: DayOfWeek;
   floor: string;
   bar: string;
-  bartenders: string[];
+  bartenders: ScheduledBartender[];
 }
 
 export type Schedule = ScheduleEntry[];

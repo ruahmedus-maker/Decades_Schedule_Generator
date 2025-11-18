@@ -1,7 +1,6 @@
 
-
 import React from 'react';
-import type { Schedule, DayOfWeek } from '../types';
+import type { Schedule, DayOfWeek, ScheduledBartender } from '../types';
 
 interface ScheduleViewProps {
   schedule: Schedule;
@@ -21,7 +20,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule }) => {
           return null;
         }
 
-        const scheduleGrid: Record<string, Record<string, string[]>> = {};
+        const scheduleGrid: Record<string, Record<string, ScheduledBartender[]>> = {};
         
         // Fix: Explicitly set the generic type for `new Set` to `DayOfWeek` to correct type inference.
         const daysInWeek: DayOfWeek[] = [...new Set<DayOfWeek>(weekSchedule.map(entry => entry.day))]
@@ -75,7 +74,9 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule }) => {
                         </td>
                         {daysInWeek.map(day => (
                           <td key={day} className="px-6 py-4">
-                            {(scheduleGrid[key][day] || []).join(', ')}
+                            {(scheduleGrid[key][day] || [])
+                                .map(b => b.role ? `${b.name} (${b.role})` : b.name)
+                                .join(', ')}
                           </td>
                         ))}
                       </tr>

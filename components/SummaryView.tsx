@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import type { Schedule, Bartender, EarningsMap, SummaryData } from '../types';
 
@@ -16,10 +17,10 @@ const SummaryView: React.FC<SummaryViewProps> = ({ schedule, bartenders, earning
         const { floor, bar, day, bartenders: assigned } = entry;
         const earnings = earningsMap[floor]?.[bar]?.[day] || 0;
         
-        assigned.forEach(name => {
-            if (summary[name]) {
-                summary[name].shiftCount++;
-                summary[name].totalEarnings += earnings;
+        assigned.forEach(b => {
+            if (summary[b.name]) {
+                summary[b.name].shiftCount++;
+                summary[b.name].totalEarnings += earnings;
             }
         });
     });
