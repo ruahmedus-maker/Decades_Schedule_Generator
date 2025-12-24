@@ -19,6 +19,7 @@ import { EyeIcon } from './components/icons/EyeIcon';
 import FloorDistributionView from './components/FloorDistributionView';
 
 const App: React.FC = () => {
+  // --- State Initialization with Persistence ---
   const [bartenders, setBartenders] = useState<Bartender[]>(() => {
     const saved = window.localStorage.getItem('bartenders');
     return saved ? JSON.parse(saved) : initialBartenders;
@@ -57,13 +58,12 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   
-  useEffect(() => {
-    window.localStorage.setItem('bartenders', JSON.stringify(bartenders));
-    window.localStorage.setItem('fixedAssignments', JSON.stringify(fixedAssignments));
-    window.localStorage.setItem('timeOffRequests', JSON.stringify(timeOffRequests));
-    window.localStorage.setItem('targetShifts', JSON.stringify(targetShifts));
-    window.localStorage.setItem('closedShifts', JSON.stringify(closedShifts));
-  }, [bartenders, fixedAssignments, timeOffRequests, targetShifts, closedShifts]);
+  // --- Granular Persistence Effects ---
+  useEffect(() => window.localStorage.setItem('bartenders', JSON.stringify(bartenders)), [bartenders]);
+  useEffect(() => window.localStorage.setItem('fixedAssignments', JSON.stringify(fixedAssignments)), [fixedAssignments]);
+  useEffect(() => window.localStorage.setItem('timeOffRequests', JSON.stringify(timeOffRequests)), [timeOffRequests]);
+  useEffect(() => window.localStorage.setItem('targetShifts', JSON.stringify(targetShifts)), [targetShifts]);
+  useEffect(() => window.localStorage.setItem('closedShifts', JSON.stringify(closedShifts)), [closedShifts]);
 
   const getMonday = (d: Date) => {
     const day = d.getDay();
@@ -130,7 +130,7 @@ const App: React.FC = () => {
     }, 50);
   }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode, dailyOverrides, getSpecificDay]);
   
-  const getScheduleTitle = () => {
+  const scheduleTitle = useCallback(() => {
     if (!startDate) return 'Schedule';
     const dateObj = new Date(startDate + 'T00:00:00');
     if (generationMode === 'daily') return dateObj.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
@@ -139,13 +139,15 @@ const App: React.FC = () => {
     const endDate = new Date(startMonday);
     endDate.setDate(endDate.getDate() + 27); 
     return `${startMonday.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
-  };
+  }, [startDate, generationMode])();
 
-  const getEffectiveMondayDate = () => {
+  const effectiveStartDate = getEffectiveMondayDate();
+
+  function getEffectiveMondayDate() {
     if (!startDate) return undefined;
     const d = new Date(startDate + 'T00:00:00');
     return getMonday(d).toISOString().split('T')[0];
-  };
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-200 font-sans p-4 sm:p-6 lg:p-8">
@@ -158,7 +160,7 @@ const App: React.FC = () => {
         </header>
 
         <main className="grid grid-cols-1 xl:grid-cols-4 xl:items-start gap-8">
-          <aside className="xl:col-span-1 space-y-8 p-6 bg-slate-800/50 rounded-2xl border border-slate-700 shadow-lg xl:sticky xl:top-8">
+          <aside className="xl:col-span-1 space-y-8 p-6 bg-slate-800/50 rounded-2xl border border-slate-700 shadow-lg xl:sticky xl:top-8 overflow-y-auto max-h-[calc(100vh-4rem)] custom-scrollbar">
             <div className="space-y-3 border-b border-slate-700 pb-6">
                 <h3 className="text-base font-semibold text-slate-200">Schedule Mode</h3>
                 <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-600">
@@ -176,7 +178,7 @@ const App: React.FC = () => {
                     <label className="block text-xs text-slate-400 mb-1">Start Date</label>
                     <div className="relative">
                         <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none"/>
-                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-slate-900/70 border border-slate-600 rounded-md py-2 pl-9 text-sm text-slate-200" />
+                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-slate-900/70 border border-slate-600 rounded-md py-2 pl-9 text-sm text-slate-200 focus:ring-1 focus:ring-indigo-500" />
                     </div>
                 </div>
             </div>
@@ -211,12 +213,12 @@ const App: React.FC = () => {
             </div>
           </aside>
 
-          <section className="xl:col-span-3 p-6 bg-slate-800/50 rounded-2xl border border-slate-700 shadow-lg">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-white uppercase tracking-wide">{getScheduleTitle()}</h2>
+          <section className="xl:col-span-3 p-6 bg-slate-800/50 rounded-2xl border border-slate-700 shadow-lg min-h-[80vh]">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4">
+              <h2 className="text-2xl font-bold text-white uppercase tracking-wide">{scheduleTitle}</h2>
               {schedule && schedule.length > 0 && (
-                <button onClick={() => exportScheduleToHtml(schedule, getScheduleTitle(), bartenders, EARNINGS_MAP, getEffectiveMondayDate())} className="flex items-center gap-2 bg-slate-700 text-slate-200 py-2 px-4 rounded-lg hover:bg-slate-600 transition-colors">
-                  <DownloadIcon className="h-5 w-5" /> Export
+                <button onClick={() => exportScheduleToHtml(schedule, scheduleTitle, bartenders, EARNINGS_MAP, effectiveStartDate)} className="flex items-center gap-2 bg-slate-700 text-slate-200 py-2 px-4 rounded-lg hover:bg-slate-600 transition-colors">
+                  <DownloadIcon className="h-5 w-5" /> Export HTML
                 </button>
               )}
             </div>
@@ -228,7 +230,7 @@ const App: React.FC = () => {
                 <>
                   <SummaryView schedule={schedule} bartenders={bartenders} earningsMap={EARNINGS_MAP} />
                   <FloorDistributionView schedule={schedule} bartenders={bartenders} />
-                  <ScheduleView schedule={schedule} startDate={getEffectiveMondayDate()} />
+                  <ScheduleView schedule={schedule} startDate={effectiveStartDate} />
                 </>
               ) : (
                  !isLoading && (
@@ -238,6 +240,12 @@ const App: React.FC = () => {
                       <p className="text-sm mt-1 max-w-sm">Use "Preview Fixed Only" to see your manual setup, or "Generate Full Schedule" to let the AI fill the blanks.</p>
                   </div>
                  )
+              )}
+              {isLoading && (
+                  <div className="flex flex-col items-center justify-center min-h-[400px] text-center text-slate-500">
+                    <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <p className="text-lg font-medium">{statusMsg || 'Generating schedule...'}</p>
+                  </div>
               )}
             </div>
           </section>
