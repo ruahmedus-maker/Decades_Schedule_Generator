@@ -56,16 +56,11 @@ export type Schedule = ScheduleEntry[];
 
 export type TargetShifts = Record<string, number>;
 
-export interface TimeOffDate {
-  week: number;
-  day: DayOfWeek;
-}
-
 export interface TimeOffRequest {
   id: string;
   name: string;
-  startDate: TimeOffDate;
-  endDate: TimeOffDate;
+  startDate: string; // YYYY-MM-DD
+  endDate: string;   // YYYY-MM-DD
 }
 
 export type EarningsMap = {

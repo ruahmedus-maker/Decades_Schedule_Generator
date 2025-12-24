@@ -112,6 +112,8 @@ const App: React.FC = () => {
     setTimeout(() => {
       try {
         const weeksToGenerate = generationMode === 'monthly' ? 4 : 1;
+        const effectiveBaseDate = getEffectiveMondayDate() || startDate;
+        
         const generatedSchedule = generateSchedule(
             bartenders, 
             SHIFTS_TEMPLATE, 
@@ -121,7 +123,8 @@ const App: React.FC = () => {
             closedShifts,
             weeksToGenerate,
             getSpecificDay(),
-            generationMode === 'daily' ? dailyOverrides : []
+            generationMode === 'daily' ? dailyOverrides : [],
+            effectiveBaseDate
         );
         setSchedule(generatedSchedule);
       } catch (err) {
@@ -131,7 +134,7 @@ const App: React.FC = () => {
         setStatusMsg(null);
       }
     }, 50);
-  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode, dailyOverrides, getSpecificDay]);
+  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode, dailyOverrides, getSpecificDay, startDate]);
   
   const scheduleTitle = useCallback(() => {
     if (!startDate) return 'Schedule';

@@ -4,43 +4,46 @@ import type { Schedule, Bartender, Shift, FixedAssignment, TargetShifts, TimeOff
 const DAY_ORDER: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Sun_Night'];
 
 /**
+ * Calculates a date string for a specific week and day relative to a start date.
+ */
+function getShiftDate(baseDateStr: string, week: number, day: DayOfWeek): string {
+  const date = new Date(baseDateStr + 'T00:00:00');
+  const dayIndex = DAY_ORDER.indexOf(day);
+  const offset = dayIndex === 7 ? 6 : dayIndex; // Sun and Sun_Night use same day offset
+  date.setDate(date.getDate() + offset + ((week - 1) * 7));
+  return date.toISOString().split('T')[0];
+}
+
+/**
  * Checks if a bartender is available for a specific shift, considering all constraints.
  */
 function isBartenderAvailable(
   bartender: Bartender,
-  week: number,
+  shiftDate: string,
   day: DayOfWeek,
   timeOffMap: Set<string>,
   shiftsThisDay: Set<string> // Set of bartenders already scheduled on this day
 ): boolean {
   if (bartender.unavailableDays.includes(day)) return false;
-  if (timeOffMap.has(`${bartender.name}-${week}-${day}`)) return false;
+  if (timeOffMap.has(`${bartender.name}-${shiftDate}`)) return false;
   if (shiftsThisDay.has(bartender.name)) return false;
   return true;
 }
 
 /**
- * Creates a fast-lookup Set for all time off requests.
+ * Creates a fast-lookup Set for all time off requests based on calendar dates.
  */
 function createTimeOffMap(timeOffRequests: TimeOffRequest[]): Set<string> {
   const timeOffMap = new Set<string>();
   timeOffRequests.forEach(req => {
-    const { name, startDate, endDate } = req;
-    let currentWeek = startDate.week;
-    let currentDayIndex = DAY_ORDER.indexOf(startDate.day);
-    const endDayIndex = DAY_ORDER.indexOf(endDate.day);
-
-    let safety = 0;
-    while (safety < 100) {
-      safety++;
-      const currentDay = DAY_ORDER[currentDayIndex];
-      timeOffMap.add(`${name}-${currentWeek}-${currentDay}`);
-      if (currentWeek === endDate.week && currentDayIndex === endDayIndex) break;
-      currentDayIndex++;
-      if (currentDayIndex >= DAY_ORDER.length) {
-        currentDayIndex = 0;
-        currentWeek++;
-      }
+    const start = new Date(req.startDate + 'T00:00:00');
+    const end = new Date(req.endDate + 'T00:00:00');
+    
+    let current = new Date(start);
+    while (current <= end) {
+      const dateStr = current.toISOString().split('T')[0];
+      timeOffMap.add(`${req.name}-${dateStr}`);
+      current.setDate(current.getDate() + 1);
     }
   });
   return timeOffMap;
@@ -122,7 +125,8 @@ export function generateSchedule(
     closedShifts: ClosedShift[],
     weeksToGenerate: number = 4,
     specificDay?: DayOfWeek,
-    dailyOverrides: DailyOverride[] = []
+    dailyOverrides: DailyOverride[] = [],
+    calendarStartDate: string = '' // YYYY-MM-DD
 ): Schedule {
   const schedule: Schedule = [];
   const shiftCounts: Record<string, number> = bartenders.reduce((acc, b) => ({ ...acc, [b.name]: 0 }), {});
@@ -182,10 +186,11 @@ export function generateSchedule(
   // Fill remaining slots
   for (let week = 1; week <= weeksToGenerate; week++) {
     const shiftsForWeek = schedule.filter(s => s.week === week).sort((a,b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day));
-    const dayProcessed = new Set<DayOfWeek>();
 
     shiftsForWeek.forEach(shift => {
       const day = shift.day;
+      const shiftDate = getShiftDate(calendarStartDate, week, day);
+      
       const scheduledThisDay = new Set<string>();
       schedule.filter(s => s.week === week && s.day === day).forEach(s => s.bartenders.forEach(b => scheduledThisDay.add(b.name)));
       
@@ -194,7 +199,7 @@ export function generateSchedule(
       const neededCount = bartendersNeeded - shift.bartenders.length;
       if (neededCount <= 0) return;
 
-      let availableCandidates = bartenders.filter(b => isBartenderAvailable(b, week, day, timeOffMap, scheduledThisDay));
+      let availableCandidates = bartenders.filter(b => isBartenderAvailable(b, shiftDate, day, timeOffMap, scheduledThisDay));
       if (day === 'Sat' && shift.floor === "2000's") availableCandidates = availableCandidates.filter(c => !saturday2000sWorkers.has(c.name));
 
       availableCandidates.sort((a, b) => {
@@ -231,11 +236,9 @@ export function generateSchedule(
 
   // Final role assignment
   schedule.forEach(shift => {
-    const nonFixed = shift.bartenders.filter(b => b.role !== 'Fixed');
     if (shift.bartenders.length > 1) {
-      const currentPoint = shift.bartenders.find(b => b.role === 'Point');
-      const currentFixed = shift.bartenders.find(b => b.role === 'Fixed');
-      if (!currentPoint && !currentFixed) {
+      const hasDefinedRole = shift.bartenders.some(b => b.role === 'Point' || b.role === 'Fixed');
+      if (!hasDefinedRole) {
           shift.bartenders[0].role = 'Point';
       }
     }
