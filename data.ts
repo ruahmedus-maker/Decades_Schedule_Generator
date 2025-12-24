@@ -1,3 +1,4 @@
+
 import type { Bartender, Shift, FixedAssignment, DayOfWeek, EarningsMap } from './types';
 
 export const BARTENDERS: Bartender[] = [
@@ -37,7 +38,7 @@ export const SHIFTS_TEMPLATE: Shift[] = [
   { floor: 'Hip Hop', bar: 'Back Bar', day: 'Sat', gender: null, bartendersNeeded: 1 },
   { floor: 'Rooftop', bar: 'Main Bar', day: 'Sat', gender: null, bartendersNeeded: 2 },
   // Sundays
-  { floor: 'Rooftop', bar: 'Main Bar', day: 'Sun', gender: null, bartendersNeeded: 2 },
+  { floor: 'Rooftop', bar: 'Main Bar', day: 'Sun', gender: null, bartendersNeeded: 1 },
   { floor: 'Rooftop', bar: 'Main Bar', day: 'Sun_Night', gender: null, bartendersNeeded: 2 },
 ];
 

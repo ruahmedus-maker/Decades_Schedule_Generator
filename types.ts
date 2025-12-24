@@ -25,6 +25,7 @@ export interface FixedAssignment {
 }
 
 export interface DailyOverride {
+    day: DayOfWeek;
     floor: string;
     bar: string;
     name: string;

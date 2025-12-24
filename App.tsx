@@ -69,23 +69,21 @@ const App: React.FC = () => {
     }
   });
 
-  // --- New State for Mode and Date ---
+  // --- Mode and Date ---
   const [generationMode, setGenerationMode] = useState<'monthly' | 'weekly' | 'daily'>('monthly');
   const [startDate, setStartDate] = useState<string>(() => {
-    // Default to next Monday
     const d = new Date();
     d.setDate(d.getDate() + (1 + 7 - d.getDay()) % 7);
     return d.toISOString().split('T')[0];
   });
   
-  // Transient state for single day overrides (not persisted to localStorage)
   const [dailyOverrides, setDailyOverrides] = useState<DailyOverride[]>([]);
 
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   
-  // --- State Persistence ---
+  // Persistence
   useEffect(() => {
     try {
       window.localStorage.setItem('bartenders', JSON.stringify(bartenders));
@@ -126,14 +124,10 @@ const App: React.FC = () => {
     }
   }, [closedShifts]);
 
-  // --- Logic Effects ---
   useEffect(() => {
-    // Sync target shifts with the main bartender list.
     setTargetShifts(prevTargets => {
       const newTargets: TargetShifts = {};
-      // Adjust average shifts based on mode (Monthly approx 10-12, Weekly approx 3-4)
       const weeks = generationMode === 'monthly' ? 4 : 1;
-      // Scale approximate total slots based on number of weeks
       const totalSlots = SHIFTS_TEMPLATE.length * weeks * 1.5; 
       const averageShifts = Math.floor(totalSlots / bartenders.length) || (weeks * 3);
       
@@ -144,12 +138,19 @@ const App: React.FC = () => {
     });
   }, [bartenders, generationMode]);
 
-  // Helper to get the Monday of the current date's week
   const getMonday = (d: Date) => {
     const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
     return new Date(d.setDate(diff));
   }
+
+  const getSpecificDay = useCallback(() => {
+    if (generationMode !== 'daily') return undefined;
+    const d = new Date(startDate + 'T00:00:00');
+    const dayIndex = d.getDay();
+    const dayMap: DayOfWeek[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return dayMap[dayIndex];
+  }, [startDate, generationMode]);
 
   const handleGenerateSchedule = useCallback(() => {
     setIsLoading(true);
@@ -159,15 +160,7 @@ const App: React.FC = () => {
     setTimeout(() => {
       try {
         const weeksToGenerate = generationMode === 'monthly' ? 4 : 1;
-        let specificDay: DayOfWeek | undefined = undefined;
-        
-        // Logic to handle specific day generation
-        if (generationMode === 'daily') {
-            const d = new Date(startDate + 'T00:00:00'); // Force local time
-            const dayIndex = d.getDay(); // 0 = Sun, 1 = Mon ...
-            const dayMap: DayOfWeek[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-            specificDay = dayMap[dayIndex];
-        }
+        const specificDay = getSpecificDay();
 
         const generatedSchedule = generateSchedule(
             bartenders, 
@@ -178,7 +171,6 @@ const App: React.FC = () => {
             closedShifts,
             weeksToGenerate,
             specificDay,
-            // Pass daily overrides only in daily mode
             generationMode === 'daily' ? dailyOverrides : []
         );
         setSchedule(generatedSchedule);
@@ -189,36 +181,28 @@ const App: React.FC = () => {
         setIsLoading(false);
       }
     }, 50);
-  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode, startDate, dailyOverrides]);
+  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode, startDate, dailyOverrides, getSpecificDay]);
   
   const getScheduleTitle = () => {
     if (!startDate) return 'Schedule';
-    
     const dateObj = new Date(startDate + 'T00:00:00');
-    
     if (generationMode === 'daily') {
         return dateObj.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
     }
-
     const startMonday = getMonday(dateObj);
-    
     if (generationMode === 'weekly') {
         return `Week of ${startMonday.toLocaleDateString()}`;
     }
-    
     if (generationMode === 'monthly') {
         const endDate = new Date(startMonday);
-        endDate.setDate(endDate.getDate() + 27); // 4 weeks (28 days) - 1 day to get end date
+        endDate.setDate(endDate.getDate() + 27); 
         return `${startMonday.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
     }
-    
     return 'Schedule';
   };
 
   const getEffectiveMondayDate = () => {
     if (!startDate) return undefined;
-    // We pass the Monday of the selected week (or start week) to ScheduleView/Exporter
-    // so they can calculate offsets correctly.
     const d = new Date(startDate + 'T00:00:00');
     const monday = getMonday(d);
     return monday.toISOString().split('T')[0];
@@ -226,6 +210,7 @@ const App: React.FC = () => {
 
   const scheduleTitle = getScheduleTitle();
   const effectiveStartDate = getEffectiveMondayDate();
+  const currentSpecificDay = getSpecificDay();
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-200 font-sans p-4 sm:p-6 lg:p-8">
@@ -240,10 +225,8 @@ const App: React.FC = () => {
         </header>
 
         <main className="grid grid-cols-1 xl:grid-cols-4 xl:items-start gap-8">
-          {/* Controls Section */}
           <aside className="xl:col-span-1 space-y-8 p-6 bg-slate-800/50 rounded-2xl border border-slate-700 shadow-lg xl:sticky xl:top-8">
             
-            {/* Mode Selection */}
             <div className="space-y-3 border-b border-slate-700 pb-6">
                 <h3 className="text-base font-semibold text-slate-200">Schedule Mode</h3>
                 <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-600">
@@ -283,36 +266,30 @@ const App: React.FC = () => {
                 </div>
             </div>
 
-            {/* Daily Overrides (Only visible in Daily Mode) */}
-            {generationMode === 'daily' && (
+            {generationMode === 'daily' && currentSpecificDay && (
                  <DailyOverrideManager 
                     dailyOverrides={dailyOverrides}
                     setDailyOverrides={setDailyOverrides}
                     bartenders={bartenders}
                     shifts={SHIFTS_TEMPLATE}
+                    specificDay={currentSpecificDay}
                  />
             )}
 
             <BartenderManager bartenders={bartenders} setBartenders={setBartenders} />
-            
             <WeeklyAvailabilityManager bartenders={bartenders} setBartenders={setBartenders} />
-            
             <TimeOffRequestManager 
               timeOffRequests={timeOffRequests} 
               setTimeOffRequests={setTimeOffRequests} 
               bartenders={bartenders} 
             />
-
             <TargetShiftsManager targetShifts={targetShifts} setTargetShifts={setTargetShifts} />
-            
-            {/* Standard Fixed Shift Manager (Always visible, but logic handles daily overrides) */}
             <FixedShiftManager
               fixedAssignments={fixedAssignments}
               setFixedAssignments={setFixedAssignments}
               bartenders={bartenders}
               shifts={SHIFTS_TEMPLATE}
             />
-
             <EventShiftManager
               closedShifts={closedShifts}
               setClosedShifts={setClosedShifts}
@@ -343,7 +320,6 @@ const App: React.FC = () => {
             </div>
           </aside>
 
-          {/* Schedule Display Section */}
           <section className="xl:col-span-3 p-6 bg-slate-800/50 rounded-2xl border border-slate-700 shadow-lg">
             <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
               <h2 className="text-2xl font-bold text-white">
@@ -390,7 +366,7 @@ const App: React.FC = () => {
                       <p className="text-lg font-semibold">Your generated schedule will appear here.</p>
                       {generationMode === 'daily' && (
                           <p className="text-sm mt-2 text-amber-400/70 max-w-md">
-                              Note: If the selected day (e.g. Monday) has no standard shifts, the schedule will be empty unless you add <strong>Daily Specific Assignments</strong>.
+                              Note: If the selected day has no standard shifts, the schedule will be empty unless you add <strong>Daily Specific Assignments</strong>.
                           </p>
                       )}
                   </div>
