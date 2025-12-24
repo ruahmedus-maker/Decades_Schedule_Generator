@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { Schedule, Bartender, FixedAssignment, TargetShifts, TimeOffRequest, ClosedShift, DayOfWeek, DailyOverride } from './types';
 import { BARTENDERS as initialBartenders, SHIFTS_TEMPLATE, FIXED_ASSIGNMENTS as initialFixedAssignments, EARNINGS_MAP } from './data';
-import { generateSchedule } from './services/schedulingAlgorithm';
+import { generateSchedule, generateFixedOnlySchedule } from './services/schedulingAlgorithm';
 import { exportScheduleToHtml } from './utils/scheduleExporter';
 import ScheduleView from './components/ScheduleView';
 import SummaryView from './components/SummaryView';
@@ -15,61 +15,35 @@ import EventShiftManager from './components/EventShiftManager';
 import DailyOverrideManager from './components/DailyOverrideManager';
 import { DownloadIcon } from './components/icons/DownloadIcon';
 import { CalendarIcon } from './components/icons/CalendarIcon';
+import { EyeIcon } from './components/icons/EyeIcon';
 import FloorDistributionView from './components/FloorDistributionView';
 
 const App: React.FC = () => {
-  // --- State Initialization with Persistence ---
   const [bartenders, setBartenders] = useState<Bartender[]>(() => {
-    try {
-      const saved = window.localStorage.getItem('bartenders');
-      return saved ? JSON.parse(saved) : initialBartenders;
-    } catch (error) {
-      console.error('Error reading bartenders from localStorage', error);
-      return initialBartenders;
-    }
+    const saved = window.localStorage.getItem('bartenders');
+    return saved ? JSON.parse(saved) : initialBartenders;
   });
 
   const [fixedAssignments, setFixedAssignments] = useState<FixedAssignment[]>(() => {
-    try {
-      const saved = window.localStorage.getItem('fixedAssignments');
-      return saved ? JSON.parse(saved) : initialFixedAssignments;
-    } catch (error) {
-      console.error('Error reading fixed assignments from localStorage', error);
-      return initialFixedAssignments;
-    }
+    const saved = window.localStorage.getItem('fixedAssignments');
+    return saved ? JSON.parse(saved) : initialFixedAssignments;
   });
 
   const [timeOffRequests, setTimeOffRequests] = useState<TimeOffRequest[]>(() => {
-    try {
-      const saved = window.localStorage.getItem('timeOffRequests');
-      return saved ? JSON.parse(saved) : [];
-    } catch (error) {
-      console.error('Error reading timeOffRequests from localStorage', error);
-      return [];
-    }
+    const saved = window.localStorage.getItem('timeOffRequests');
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [targetShifts, setTargetShifts] = useState<TargetShifts>(() => {
-    try {
-      const saved = window.localStorage.getItem('targetShifts');
-      return saved ? JSON.parse(saved) : {};
-    } catch (error) {
-      console.error('Error reading targetShifts from localStorage', error);
-      return {};
-    }
+    const saved = window.localStorage.getItem('targetShifts');
+    return saved ? JSON.parse(saved) : {};
   });
   
   const [closedShifts, setClosedShifts] = useState<ClosedShift[]>(() => {
-    try {
-      const saved = window.localStorage.getItem('closedShifts');
-      return saved ? JSON.parse(saved) : [];
-    } catch (error) {
-      console.error('Error reading closedShifts from localStorage', error);
-      return [];
-    }
+    const saved = window.localStorage.getItem('closedShifts');
+    return saved ? JSON.parse(saved) : [];
   });
 
-  // --- Mode and Date ---
   const [generationMode, setGenerationMode] = useState<'monthly' | 'weekly' | 'daily'>('monthly');
   const [startDate, setStartDate] = useState<string>(() => {
     const d = new Date();
@@ -78,65 +52,18 @@ const App: React.FC = () => {
   });
   
   const [dailyOverrides, setDailyOverrides] = useState<DailyOverride[]>([]);
-
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  
-  // Persistence
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('bartenders', JSON.stringify(bartenders));
-    } catch (error) {
-      console.error('Error saving bartenders to localStorage', error);
-    }
-  }, [bartenders]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('fixedAssignments', JSON.stringify(fixedAssignments));
-    } catch (error) {
-      console.error('Error saving fixed assignments to localStorage', error);
-    }
-  }, [fixedAssignments]);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
   
   useEffect(() => {
-    try {
-      window.localStorage.setItem('timeOffRequests', JSON.stringify(timeOffRequests));
-    } catch (error) {
-      console.error('Error saving timeOffRequests to localStorage', error);
-    }
-  }, [timeOffRequests]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('targetShifts', JSON.stringify(targetShifts));
-    } catch (error) {
-      console.error('Error saving targetShifts to localStorage', error);
-    }
-  }, [targetShifts]);
-  
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('closedShifts', JSON.stringify(closedShifts));
-    } catch (error) {
-      console.error('Error saving closedShifts to localStorage', error);
-    }
-  }, [closedShifts]);
-
-  useEffect(() => {
-    setTargetShifts(prevTargets => {
-      const newTargets: TargetShifts = {};
-      const weeks = generationMode === 'monthly' ? 4 : 1;
-      const totalSlots = SHIFTS_TEMPLATE.length * weeks * 1.5; 
-      const averageShifts = Math.floor(totalSlots / bartenders.length) || (weeks * 3);
-      
-      bartenders.forEach(b => {
-        newTargets[b.name] = prevTargets[b.name] !== undefined ? prevTargets[b.name] : averageShifts;
-      });
-      return newTargets;
-    });
-  }, [bartenders, generationMode]);
+    window.localStorage.setItem('bartenders', JSON.stringify(bartenders));
+    window.localStorage.setItem('fixedAssignments', JSON.stringify(fixedAssignments));
+    window.localStorage.setItem('timeOffRequests', JSON.stringify(timeOffRequests));
+    window.localStorage.setItem('targetShifts', JSON.stringify(targetShifts));
+    window.localStorage.setItem('closedShifts', JSON.stringify(closedShifts));
+  }, [bartenders, fixedAssignments, timeOffRequests, targetShifts, closedShifts]);
 
   const getMonday = (d: Date) => {
     const day = d.getDay();
@@ -147,21 +74,41 @@ const App: React.FC = () => {
   const getSpecificDay = useCallback(() => {
     if (generationMode !== 'daily') return undefined;
     const d = new Date(startDate + 'T00:00:00');
-    const dayIndex = d.getDay();
     const dayMap: DayOfWeek[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    return dayMap[dayIndex];
+    return dayMap[d.getDay()];
   }, [startDate, generationMode]);
 
-  const handleGenerateSchedule = useCallback(() => {
+  const handlePreviewFixed = useCallback(() => {
     setIsLoading(true);
-    setError(null);
-    setSchedule(null);
-
+    setStatusMsg('Preparing fixed assignment preview...');
     setTimeout(() => {
       try {
         const weeksToGenerate = generationMode === 'monthly' ? 4 : 1;
-        const specificDay = getSpecificDay();
+        const generated = generateFixedOnlySchedule(
+            SHIFTS_TEMPLATE,
+            fixedAssignments,
+            closedShifts,
+            weeksToGenerate,
+            getSpecificDay(),
+            generationMode === 'daily' ? dailyOverrides : []
+        );
+        setSchedule(generated);
+      } catch (err) {
+        setError('Error generating preview.');
+      } finally {
+        setIsLoading(false);
+        setStatusMsg(null);
+      }
+    }, 50);
+  }, [fixedAssignments, closedShifts, generationMode, dailyOverrides, getSpecificDay]);
 
+  const handleGenerateSchedule = useCallback(() => {
+    setIsLoading(true);
+    setStatusMsg('AI is calculating optimal distribution...');
+    setError(null);
+    setTimeout(() => {
+      try {
+        const weeksToGenerate = generationMode === 'monthly' ? 4 : 1;
         const generatedSchedule = generateSchedule(
             bartenders, 
             SHIFTS_TEMPLATE, 
@@ -170,47 +117,35 @@ const App: React.FC = () => {
             timeOffRequests, 
             closedShifts,
             weeksToGenerate,
-            specificDay,
+            getSpecificDay(),
             generationMode === 'daily' ? dailyOverrides : []
         );
         setSchedule(generatedSchedule);
       } catch (err) {
-        console.error(err);
-        setError(err instanceof Error ? err.message : 'An unknown error occurred while generating the schedule.');
+        setError(err instanceof Error ? err.message : 'An error occurred.');
       } finally {
         setIsLoading(false);
+        setStatusMsg(null);
       }
     }, 50);
-  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode, startDate, dailyOverrides, getSpecificDay]);
+  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode, dailyOverrides, getSpecificDay]);
   
   const getScheduleTitle = () => {
     if (!startDate) return 'Schedule';
     const dateObj = new Date(startDate + 'T00:00:00');
-    if (generationMode === 'daily') {
-        return dateObj.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
-    }
+    if (generationMode === 'daily') return dateObj.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
     const startMonday = getMonday(dateObj);
-    if (generationMode === 'weekly') {
-        return `Week of ${startMonday.toLocaleDateString()}`;
-    }
-    if (generationMode === 'monthly') {
-        const endDate = new Date(startMonday);
-        endDate.setDate(endDate.getDate() + 27); 
-        return `${startMonday.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
-    }
-    return 'Schedule';
+    if (generationMode === 'weekly') return `Week of ${startMonday.toLocaleDateString()}`;
+    const endDate = new Date(startMonday);
+    endDate.setDate(endDate.getDate() + 27); 
+    return `${startMonday.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
   };
 
   const getEffectiveMondayDate = () => {
     if (!startDate) return undefined;
     const d = new Date(startDate + 'T00:00:00');
-    const monday = getMonday(d);
-    return monday.toISOString().split('T')[0];
+    return getMonday(d).toISOString().split('T')[0];
   };
-
-  const scheduleTitle = getScheduleTitle();
-  const effectiveStartDate = getEffectiveMondayDate();
-  const currentSpecificDay = getSpecificDay();
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-200 font-sans p-4 sm:p-6 lg:p-8">
@@ -219,165 +154,91 @@ const App: React.FC = () => {
           <h1 className="text-4xl sm:text-5xl font-bold text-white tracking-tight">
             AI Bartender Schedule Generator
           </h1>
-          <p className="mt-2 text-lg text-slate-400">
-            Intelligent scheduling based on your club's specific rules.
-          </p>
+          <p className="mt-2 text-lg text-slate-400">Smart logic for automated club scheduling.</p>
         </header>
 
         <main className="grid grid-cols-1 xl:grid-cols-4 xl:items-start gap-8">
           <aside className="xl:col-span-1 space-y-8 p-6 bg-slate-800/50 rounded-2xl border border-slate-700 shadow-lg xl:sticky xl:top-8">
-            
             <div className="space-y-3 border-b border-slate-700 pb-6">
                 <h3 className="text-base font-semibold text-slate-200">Schedule Mode</h3>
                 <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-600">
-                    <button
-                        onClick={() => setGenerationMode('monthly')}
-                        className={`flex-1 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors ${generationMode === 'monthly' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
-                    >
-                        Monthly
-                    </button>
-                    <button
-                        onClick={() => setGenerationMode('weekly')}
-                        className={`flex-1 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors ${generationMode === 'weekly' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
-                    >
-                        1 Week
-                    </button>
-                    <button
-                        onClick={() => setGenerationMode('daily')}
-                        className={`flex-1 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors ${generationMode === 'daily' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
-                    >
-                        1 Day
-                    </button>
+                    {['monthly', 'weekly', 'daily'].map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => setGenerationMode(mode as any)}
+                        className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors ${generationMode === mode ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                      >
+                        {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                      </button>
+                    ))}
                 </div>
-                
-                <div className="mt-3 animate-fadeIn">
-                    <label className="block text-xs text-slate-400 mb-1">
-                        {generationMode === 'daily' ? 'Select Date' : 'Start Date (Monday of Week 1)'}
-                    </label>
+                <div className="mt-3">
+                    <label className="block text-xs text-slate-400 mb-1">Start Date</label>
                     <div className="relative">
                         <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none"/>
-                        <input 
-                            type="date" 
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            className="w-full bg-slate-900/70 border border-slate-600 rounded-md py-2 pl-9 pr-3 text-sm text-slate-200 focus:ring-1 focus:ring-indigo-500"
-                        />
+                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-slate-900/70 border border-slate-600 rounded-md py-2 pl-9 text-sm text-slate-200" />
                     </div>
                 </div>
             </div>
 
-            {generationMode === 'daily' && currentSpecificDay && (
-                 <DailyOverrideManager 
-                    dailyOverrides={dailyOverrides}
-                    setDailyOverrides={setDailyOverrides}
-                    bartenders={bartenders}
-                    shifts={SHIFTS_TEMPLATE}
-                    specificDay={currentSpecificDay}
-                 />
+            {generationMode === 'daily' && getSpecificDay() && (
+                 <DailyOverrideManager dailyOverrides={dailyOverrides} setDailyOverrides={setDailyOverrides} bartenders={bartenders} shifts={SHIFTS_TEMPLATE} specificDay={getSpecificDay()!} />
             )}
 
             <BartenderManager bartenders={bartenders} setBartenders={setBartenders} />
             <WeeklyAvailabilityManager bartenders={bartenders} setBartenders={setBartenders} />
-            <TimeOffRequestManager 
-              timeOffRequests={timeOffRequests} 
-              setTimeOffRequests={setTimeOffRequests} 
-              bartenders={bartenders} 
-            />
+            <FixedShiftManager fixedAssignments={fixedAssignments} setFixedAssignments={setFixedAssignments} bartenders={bartenders} shifts={SHIFTS_TEMPLATE} />
+            <TimeOffRequestManager timeOffRequests={timeOffRequests} setTimeOffRequests={setTimeOffRequests} bartenders={bartenders} />
             <TargetShiftsManager targetShifts={targetShifts} setTargetShifts={setTargetShifts} />
-            <FixedShiftManager
-              fixedAssignments={fixedAssignments}
-              setFixedAssignments={setFixedAssignments}
-              bartenders={bartenders}
-              shifts={SHIFTS_TEMPLATE}
-            />
-            <EventShiftManager
-              closedShifts={closedShifts}
-              setClosedShifts={setClosedShifts}
-              shifts={SHIFTS_TEMPLATE}
-            />
+            <EventShiftManager closedShifts={closedShifts} setClosedShifts={setClosedShifts} shifts={SHIFTS_TEMPLATE} />
 
-            <div className="pt-4 border-t border-slate-700">
+            <div className="pt-4 border-t border-slate-700 space-y-3">
+              <button
+                onClick={handlePreviewFixed}
+                disabled={isLoading}
+                className="w-full flex items-center justify-center gap-2 bg-slate-700 text-slate-100 font-semibold py-2.5 px-4 rounded-lg hover:bg-slate-600 transition-colors"
+              >
+                <EyeIcon className="h-5 w-5" />
+                Preview Fixed Only
+              </button>
               <button
                 onClick={handleGenerateSchedule}
                 disabled={isLoading}
-                className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-500 disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500"
+                className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-500 disabled:bg-slate-600 transition-all shadow-[0_4px_12px_rgba(79,70,229,0.3)]"
               >
-                {isLoading ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <CalendarIcon className="h-5 w-5" />
-                    Generate Schedule
-                  </>
-                )}
+                {isLoading ? <span className="animate-pulse">{statusMsg || 'Working...'}</span> : <><CalendarIcon className="h-5 w-5" /> Generate Full Schedule</>}
               </button>
             </div>
           </aside>
 
           <section className="xl:col-span-3 p-6 bg-slate-800/50 rounded-2xl border border-slate-700 shadow-lg">
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
-              <h2 className="text-2xl font-bold text-white">
-                {generationMode === 'daily' ? 'Daily Schedule' : 'Schedule'} 
-                <span className="text-indigo-400 ml-2 text-lg font-normal">({scheduleTitle})</span>
-              </h2>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-white uppercase tracking-wide">{getScheduleTitle()}</h2>
               {schedule && schedule.length > 0 && (
-                <button
-                  onClick={() => exportScheduleToHtml(
-                      schedule, 
-                      scheduleTitle, 
-                      bartenders, 
-                      EARNINGS_MAP, 
-                      effectiveStartDate
-                  )}
-                  className="flex items-center justify-center sm:justify-start gap-2 bg-slate-700 text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-slate-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-slate-500"
-                >
-                  <DownloadIcon className="h-5 w-5" />
-                  Export HTML Report
+                <button onClick={() => exportScheduleToHtml(schedule, getScheduleTitle(), bartenders, EARNINGS_MAP, getEffectiveMondayDate())} className="flex items-center gap-2 bg-slate-700 text-slate-200 py-2 px-4 rounded-lg hover:bg-slate-600 transition-colors">
+                  <DownloadIcon className="h-5 w-5" /> Export
                 </button>
               )}
             </div>
             
-            {error && (
-              <div className="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-lg text-center">
-                <p><strong>Error:</strong> {error}</p>
-              </div>
-            )}
+            {error && <div className="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-lg mb-4">{error}</div>}
             
-            <div className="mt-4 space-y-8">
+            <div className="space-y-8">
               {schedule && schedule.length > 0 ? (
                 <>
                   <SummaryView schedule={schedule} bartenders={bartenders} earningsMap={EARNINGS_MAP} />
                   <FloorDistributionView schedule={schedule} bartenders={bartenders} />
-                  <ScheduleView 
-                    schedule={schedule} 
-                    startDate={effectiveStartDate}
-                  />
+                  <ScheduleView schedule={schedule} startDate={getEffectiveMondayDate()} />
                 </>
               ) : (
-                 !isLoading && !error && (
-                  <div className="flex flex-col items-center justify-center min-h-[60vh] text-center text-slate-500 border-2 border-dashed border-slate-700 rounded-lg">
-                      <CalendarIcon className="h-16 w-16 mb-4 text-slate-600"/>
-                      <p className="text-lg font-semibold">Your generated schedule will appear here.</p>
-                      {generationMode === 'daily' && (
-                          <p className="text-sm mt-2 text-amber-400/70 max-w-md">
-                              Note: If the selected day has no standard shifts, the schedule will be empty unless you add <strong>Daily Specific Assignments</strong>.
-                          </p>
-                      )}
+                 !isLoading && (
+                  <div className="flex flex-col items-center justify-center min-h-[400px] text-center text-slate-500 border-2 border-dashed border-slate-700 rounded-xl">
+                      <CalendarIcon className="h-12 w-12 mb-4 opacity-20"/>
+                      <p className="text-lg font-medium">Ready to build your schedule.</p>
+                      <p className="text-sm mt-1 max-w-sm">Use "Preview Fixed Only" to see your manual setup, or "Generate Full Schedule" to let the AI fill the blanks.</p>
                   </div>
                  )
               )}
-               {isLoading && (
-                  <div className="flex flex-col items-center justify-center min-h-[60vh] text-center text-slate-500 border-2 border-dashed border-slate-700 rounded-lg">
-                      <p className="text-lg font-semibold">Crafting the perfect schedule based on your rules...</p>
-                      <p>This may take a moment.</p>
-                  </div>
-               )}
             </div>
           </section>
         </main>
