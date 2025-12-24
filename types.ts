@@ -17,7 +17,7 @@ export interface Shift {
 }
 
 export interface FixedAssignment {
-    week: `Week_${1|2|3|4}`;
+    week: `Week_${1|2|3|4|5}`;
     day: DayOfWeek;
     floor: string;
     bar: string;
@@ -33,7 +33,7 @@ export interface DailyOverride {
 
 export interface ClosedShift {
   id: string;
-  week: `Week_${1|2|3|4}`;
+  week: `Week_${1|2|3|4|5}`;
   day: DayOfWeek;
   floor: string;
   bar: string;

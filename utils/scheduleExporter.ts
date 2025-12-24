@@ -114,7 +114,11 @@ function generateWeeklySections(schedule: Schedule, startDate?: string): string 
     let html = `<div class="section">
         <h2 class="section-title">🗓️ Schedule</h2>`;
 
-    for (let i = 1; i <= 4; i++) {
+    if (schedule.length === 0) return html + "</div>";
+    
+    const maxWeek = Math.max(...schedule.map(s => s.week));
+
+    for (let i = 1; i <= maxWeek; i++) {
         const weekSchedule = getWeekData(schedule, i);
         if (weekSchedule.length === 0) continue;
 

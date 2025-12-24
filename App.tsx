@@ -46,6 +46,7 @@ const App: React.FC = () => {
   });
 
   const [generationMode, setGenerationMode] = useState<'monthly' | 'weekly' | 'daily'>('monthly');
+  const [weeksToGenerate, setWeeksToGenerate] = useState<number>(5);
   const [startDate, setStartDate] = useState<string>(() => {
     const d = new Date();
     // Default to the next Monday
@@ -59,6 +60,12 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   
+  // Update weeks based on mode
+  useEffect(() => {
+    if (generationMode === 'monthly') setWeeksToGenerate(5);
+    else setWeeksToGenerate(1);
+  }, [generationMode]);
+
   // --- Granular Persistence Effects ---
   useEffect(() => window.localStorage.setItem('bartenders', JSON.stringify(bartenders)), [bartenders]);
   useEffect(() => window.localStorage.setItem('fixedAssignments', JSON.stringify(fixedAssignments)), [fixedAssignments]);
@@ -86,7 +93,6 @@ const App: React.FC = () => {
     setStatusMsg('Preparing fixed assignment preview...');
     setTimeout(() => {
       try {
-        const weeksToGenerate = generationMode === 'monthly' ? 4 : 1;
         const generated = generateFixedOnlySchedule(
             SHIFTS_TEMPLATE,
             fixedAssignments,
@@ -103,7 +109,7 @@ const App: React.FC = () => {
         setStatusMsg(null);
       }
     }, 50);
-  }, [fixedAssignments, closedShifts, generationMode, dailyOverrides, getSpecificDay]);
+  }, [fixedAssignments, closedShifts, generationMode, weeksToGenerate, dailyOverrides, getSpecificDay]);
 
   const handleGenerateSchedule = useCallback(() => {
     setIsLoading(true);
@@ -111,7 +117,6 @@ const App: React.FC = () => {
     setError(null);
     setTimeout(() => {
       try {
-        const weeksToGenerate = generationMode === 'monthly' ? 4 : 1;
         const effectiveBaseDate = getEffectiveMondayDate() || startDate;
         
         const generatedSchedule = generateSchedule(
@@ -134,7 +139,7 @@ const App: React.FC = () => {
         setStatusMsg(null);
       }
     }, 50);
-  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode, dailyOverrides, getSpecificDay, startDate]);
+  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode, weeksToGenerate, dailyOverrides, getSpecificDay, startDate]);
   
   const scheduleTitle = useCallback(() => {
     if (!startDate) return 'Schedule';
@@ -143,9 +148,9 @@ const App: React.FC = () => {
     const startMonday = getMonday(dateObj);
     if (generationMode === 'weekly') return `Week of ${startMonday.toLocaleDateString()}`;
     const endDate = new Date(startMonday);
-    endDate.setDate(endDate.getDate() + 27); 
+    endDate.setDate(endDate.getDate() + (weeksToGenerate * 7) - 1); 
     return `${startMonday.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
-  }, [startDate, generationMode])();
+  }, [startDate, generationMode, weeksToGenerate])();
 
   const getEffectiveMondayDate = () => {
     if (!startDate) return undefined;
@@ -169,7 +174,7 @@ const App: React.FC = () => {
 
         <main className="grid grid-cols-1 xl:grid-cols-4 xl:items-start gap-8">
           <aside className="xl:col-span-1 space-y-8 p-6 bg-slate-800/50 rounded-2xl border border-slate-700 shadow-lg xl:sticky xl:top-8 overflow-y-auto max-h-[calc(100vh-4rem)] custom-scrollbar">
-            <div className="space-y-3 border-b border-slate-700 pb-6">
+            <div className="space-y-4 border-b border-slate-700 pb-6">
                 <h3 className="text-base font-semibold text-slate-200">Schedule Mode</h3>
                 <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-600">
                     {['monthly', 'weekly', 'daily'].map((mode) => (
@@ -182,7 +187,21 @@ const App: React.FC = () => {
                       </button>
                     ))}
                 </div>
-                <div className="mt-3">
+                
+                {generationMode !== 'daily' && (
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Number of Weeks</label>
+                    <select 
+                      value={weeksToGenerate}
+                      onChange={(e) => setWeeksToGenerate(parseInt(e.target.value))}
+                      className="w-full bg-slate-900/70 border border-slate-600 rounded-md py-2 px-3 text-sm text-slate-200"
+                    >
+                      {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} Week{n > 1 ? 's' : ''}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                <div>
                     <label className="block text-xs text-slate-400 mb-1">Start Date</label>
                     <div className="relative">
                         <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none"/>

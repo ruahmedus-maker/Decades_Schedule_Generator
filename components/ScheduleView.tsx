@@ -13,7 +13,10 @@ const FLOOR_ORDER = ['Rooftop', 'Hip Hop', "2010's", "2000's"];
 const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate }) => {
   // Pre-process the schedule data to avoid heavy logic inside the render loops
   const groupedData = useMemo(() => {
-    const weeks = [1, 2, 3, 4];
+    if (!schedule.length) return [];
+    const maxWeek = Math.max(...schedule.map(s => s.week));
+    const weeks = Array.from({ length: maxWeek }, (_, i) => i + 1);
+    
     return weeks.map(week => {
       const weekSchedule = schedule.filter(s => s.week === week);
       if (weekSchedule.length === 0) return null;

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import type { FixedAssignment, Bartender, Shift, DayOfWeek } from '../types';
 import { TrashIcon } from './icons/TrashIcon';
@@ -10,7 +11,7 @@ interface FixedShiftManagerProps {
   shifts: Shift[];
 }
 
-const weekOptions: FixedAssignment['week'][] = ['Week_1', 'Week_2', 'Week_3', 'Week_4'];
+const weekOptions: FixedAssignment['week'][] = ['Week_1', 'Week_2', 'Week_3', 'Week_4', 'Week_5'];
 const dayOptions: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Sun_Night'];
 
 const FixedShiftManager: React.FC<FixedShiftManagerProps> = ({ fixedAssignments, setFixedAssignments, bartenders, shifts }) => {

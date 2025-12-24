@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import type { ClosedShift, Shift, DayOfWeek } from '../types';
 import { TrashIcon } from './icons/TrashIcon';
@@ -9,7 +10,7 @@ interface EventShiftManagerProps {
   shifts: Shift[];
 }
 
-const weekOptions: ClosedShift['week'][] = ['Week_1', 'Week_2', 'Week_3', 'Week_4'];
+const weekOptions: ClosedShift['week'][] = ['Week_1', 'Week_2', 'Week_3', 'Week_4', 'Week_5'];
 const dayOptions: DayOfWeek[] = ['Thu', 'Fri', 'Sat', 'Sun', 'Sun_Night'];
 
 const EventShiftManager: React.FC<EventShiftManagerProps> = ({ closedShifts, setClosedShifts, shifts }) => {
