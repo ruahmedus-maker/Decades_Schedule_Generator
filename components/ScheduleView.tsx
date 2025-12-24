@@ -41,8 +41,10 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate }) => {
   }, [schedule]);
 
   const getFormattedDate = (start: string, day: DayOfWeek, weekIndex: number) => {
-    const date = new Date(start);
+    // Append T00:00:00 to force local time interpretation
+    const date = new Date(start + 'T00:00:00');
     const dayIndex = DAY_ORDER.indexOf(day);
+    // Sun and Sun_Night use the same offset
     const offset = dayIndex === 7 ? 6 : dayIndex; 
     date.setDate(date.getDate() + offset + ((weekIndex - 1) * 7));
     return `${day.replace('_', ' ')} ${date.getMonth() + 1}/${date.getDate()}`;

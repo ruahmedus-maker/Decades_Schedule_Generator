@@ -48,8 +48,9 @@ const App: React.FC = () => {
   const [generationMode, setGenerationMode] = useState<'monthly' | 'weekly' | 'daily'>('monthly');
   const [startDate, setStartDate] = useState<string>(() => {
     const d = new Date();
+    // Default to the next Monday
     d.setDate(d.getDate() + (1 + 7 - d.getDay()) % 7);
-    return d.toISOString().split('T')[0];
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
   
   const [dailyOverrides, setDailyOverrides] = useState<DailyOverride[]>([]);
@@ -66,9 +67,11 @@ const App: React.FC = () => {
   useEffect(() => window.localStorage.setItem('closedShifts', JSON.stringify(closedShifts)), [closedShifts]);
 
   const getMonday = (d: Date) => {
-    const day = d.getDay();
+    const day = d.getDay(); // 0 = Sun, 1 = Mon...
     const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(d.setDate(diff));
+    const monday = new Date(d);
+    monday.setDate(diff);
+    return monday;
   }
 
   const getSpecificDay = useCallback(() => {
@@ -141,13 +144,15 @@ const App: React.FC = () => {
     return `${startMonday.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
   }, [startDate, generationMode])();
 
-  const effectiveStartDate = getEffectiveMondayDate();
-
-  function getEffectiveMondayDate() {
+  const getEffectiveMondayDate = () => {
     if (!startDate) return undefined;
     const d = new Date(startDate + 'T00:00:00');
-    return getMonday(d).toISOString().split('T')[0];
-  }
+    const monday = getMonday(d);
+    // Format as YYYY-MM-DD manually to avoid UTC shift
+    return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+  };
+
+  const effectiveStartDate = getEffectiveMondayDate();
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-200 font-sans p-4 sm:p-6 lg:p-8">

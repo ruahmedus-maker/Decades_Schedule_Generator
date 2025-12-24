@@ -102,10 +102,8 @@ function generateFloorDistributionSection(schedule: Schedule, bartenders: Barten
 }
 
 function getFormattedDate(start: string, day: DayOfWeek, weekOffset: number) {
-    const date = new Date(start);
-    // Assumes startDate is the Monday of the week.
+    const date = new Date(start + 'T00:00:00');
     const dayIndex = DAY_ORDER.indexOf(day);
-    // Map Sun_Night to Sunday date
     const offset = dayIndex === 7 ? 6 : dayIndex; 
     
     date.setDate(date.getDate() + offset + (weekOffset * 7));
@@ -147,8 +145,7 @@ function generateWeeklySections(schedule: Schedule, startDate?: string): string 
 
         let title = `Week ${i}`;
         if (startDate) {
-             // Use week offset i-1
-             const weekStart = new Date(startDate);
+             const weekStart = new Date(startDate + 'T00:00:00');
              weekStart.setDate(weekStart.getDate() + (i - 1) * 7);
              title = `Week ${i} (Starting ${weekStart.toLocaleDateString()})`;
         }
