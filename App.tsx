@@ -49,7 +49,6 @@ const App: React.FC = () => {
   const [weeksToGenerate, setWeeksToGenerate] = useState<number>(5);
   const [startDate, setStartDate] = useState<string>(() => {
     const d = new Date();
-    // Default to the next Monday
     d.setDate(d.getDate() + (1 + 7 - d.getDay()) % 7);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
@@ -60,13 +59,11 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   
-  // Update weeks based on mode
   useEffect(() => {
     if (generationMode === 'monthly') setWeeksToGenerate(5);
     else setWeeksToGenerate(1);
   }, [generationMode]);
 
-  // --- Granular Persistence Effects ---
   useEffect(() => window.localStorage.setItem('bartenders', JSON.stringify(bartenders)), [bartenders]);
   useEffect(() => window.localStorage.setItem('fixedAssignments', JSON.stringify(fixedAssignments)), [fixedAssignments]);
   useEffect(() => window.localStorage.setItem('timeOffRequests', JSON.stringify(timeOffRequests)), [timeOffRequests]);
@@ -74,7 +71,7 @@ const App: React.FC = () => {
   useEffect(() => window.localStorage.setItem('closedShifts', JSON.stringify(closedShifts)), [closedShifts]);
 
   const getMonday = (d: Date) => {
-    const day = d.getDay(); // 0 = Sun, 1 = Mon...
+    const day = d.getDay();
     const diff = d.getDate() - day + (day === 0 ? -6 : 1);
     const monday = new Date(d);
     monday.setDate(diff);
@@ -118,7 +115,6 @@ const App: React.FC = () => {
     setTimeout(() => {
       try {
         const effectiveBaseDate = getEffectiveMondayDate() || startDate;
-        
         const generatedSchedule = generateSchedule(
             bartenders, 
             SHIFTS_TEMPLATE, 
@@ -141,6 +137,56 @@ const App: React.FC = () => {
     }, 50);
   }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode, weeksToGenerate, dailyOverrides, getSpecificDay, startDate]);
   
+  const handleMoveAssignment = useCallback((
+    from: { week: number, day: DayOfWeek, floor: string, bar: string },
+    to: { week: number, day: DayOfWeek, floor: string, bar: string },
+    bartenderName: string
+  ) => {
+    if (!schedule) return;
+
+    // 1. Update Fixed Assignments
+    // We want to remove the specific manual rule for the old location and add/update it for the new one
+    setFixedAssignments(prev => {
+      // Filter out the rule that matches the bartender at the 'from' location
+      const filtered = prev.filter(fa => 
+        !(fa.name === bartenderName && 
+          parseInt(fa.week.split('_')[1]) === from.week && 
+          fa.day === from.day && 
+          fa.floor === from.floor && 
+          fa.bar === from.bar)
+      );
+      
+      // Add the new rule for the 'to' location
+      const newRule: FixedAssignment = {
+        name: bartenderName,
+        week: `Week_${to.week}` as any,
+        day: to.day,
+        floor: to.floor,
+        bar: to.bar
+      };
+      
+      return [...filtered, newRule];
+    });
+
+    // 2. Update current schedule view state so UI updates immediately
+    setSchedule(prev => {
+      if (!prev) return null;
+      return prev.map(entry => {
+        // Remove from original
+        if (entry.week === from.week && entry.day === from.day && entry.floor === from.floor && entry.bar === from.bar) {
+          return { ...entry, bartenders: entry.bartenders.filter(b => b.name !== bartenderName) };
+        }
+        // Add to new
+        if (entry.week === to.week && entry.day === to.day && entry.floor === to.floor && entry.bar === to.bar) {
+          // Prevent duplicates
+          if (entry.bartenders.some(b => b.name === bartenderName)) return entry;
+          return { ...entry, bartenders: [...entry.bartenders, { name: bartenderName, role: 'Fixed' }] };
+        }
+        return entry;
+      });
+    });
+  }, [schedule]);
+
   const scheduleTitle = useCallback(() => {
     if (!startDate) return 'Schedule';
     const dateObj = new Date(startDate + 'T00:00:00');
@@ -156,7 +202,6 @@ const App: React.FC = () => {
     if (!startDate) return undefined;
     const d = new Date(startDate + 'T00:00:00');
     const monday = getMonday(d);
-    // Format as YYYY-MM-DD manually to avoid UTC shift
     return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
   };
 
@@ -257,7 +302,11 @@ const App: React.FC = () => {
                 <>
                   <SummaryView schedule={schedule} bartenders={bartenders} earningsMap={EARNINGS_MAP} />
                   <FloorDistributionView schedule={schedule} bartenders={bartenders} />
-                  <ScheduleView schedule={schedule} startDate={effectiveStartDate} />
+                  <ScheduleView 
+                    schedule={schedule} 
+                    startDate={effectiveStartDate} 
+                    onMoveAssignment={handleMoveAssignment}
+                  />
                 </>
               ) : (
                  !isLoading && (
