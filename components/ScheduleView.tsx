@@ -31,7 +31,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
       const grid: Record<string, Record<string, ScheduledBartender[]>> = {};
       const days = [...new Set<DayOfWeek>(weekSchedule.map(entry => entry.day))].sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
 
-      // Calculate shift counts for this week
+      // Calculate shift counts for this specific week
       const weeklyCounts: Record<string, number> = {};
       weekSchedule.forEach(entry => {
         entry.bartenders.forEach(b => {
@@ -126,31 +126,34 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
                         return (
                           <td 
                             key={day} 
-                            className={`px-6 py-4 text-center align-top transition-all duration-200 ${isOver ? 'bg-indigo-600/20 scale-[1.02] shadow-inner' : ''}`}
+                            className={`px-6 py-4 text-center align-top transition-all duration-200 ${isOver ? 'bg-indigo-600/30 scale-[1.02] shadow-[inset_0_0_10px_rgba(79,70,229,0.3)]' : ''}`}
                             onDragOver={(e) => handleDragOver(e, cellKey)}
                             onDragLeave={() => setDragOverCell(null)}
                             onDrop={(e) => handleDrop(e, week, day as DayOfWeek, floor, bar)}
                           >
                             {bartenders.length > 0 ? (
-                              <div className="space-y-2">
+                              <div className="space-y-3">
                                 {bartenders.map((b, idx) => (
                                   <div 
                                     key={idx} 
                                     draggable
                                     onDragStart={(e) => handleDragStart(e, b.name, week, day, floor, bar)}
-                                    className="flex flex-col items-center cursor-grab active:cursor-grabbing hover:scale-105 transition-transform"
+                                    className="flex flex-col items-center cursor-grab active:cursor-grabbing hover:scale-110 transition-transform duration-150"
                                   >
-                                    <div className="flex items-center gap-1.5">
+                                    <div className="flex items-center gap-1.5 relative group/name">
                                         <span className={`font-semibold text-sm ${b.role === 'Fixed' ? 'text-amber-400' : 'text-slate-200'}`}>
                                             {b.name}
                                         </span>
                                         {/* Weekly Shift Count Badge */}
-                                        <span className="text-[10px] bg-slate-900 text-slate-400 font-bold px-1.5 py-0 rounded-full border border-slate-700" title={`Total shifts this week for ${b.name}`}>
+                                        <span 
+                                            className="text-[10px] bg-slate-900/80 text-indigo-400 font-bold px-1.5 py-0 rounded-full border border-indigo-500/30 shadow-sm" 
+                                            title={`Total shifts this week for ${b.name}`}
+                                        >
                                             {weeklyCounts[b.name] || 0}
                                         </span>
                                     </div>
                                     {b.role && (
-                                      <span className={`text-[9px] mt-0.5 uppercase font-bold px-1.5 py-0.5 rounded ${b.role === 'Fixed' ? 'bg-amber-900/40 text-amber-500 border border-amber-800/50' : 'bg-indigo-900/40 text-indigo-400 border border-indigo-800/50'}`}>
+                                      <span className={`text-[9px] mt-1 uppercase font-bold px-1.5 py-0.5 rounded ${b.role === 'Fixed' ? 'bg-amber-900/40 text-amber-500 border border-amber-800/50' : 'bg-indigo-900/40 text-indigo-400 border border-indigo-800/50'}`}>
                                         {b.role}
                                       </span>
                                     )}
@@ -159,7 +162,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
                               </div>
                             ) : (
                               <div className="py-2">
-                                <span className="text-[10px] font-bold text-slate-700 uppercase tracking-widest bg-slate-800/40 px-3 py-1.5 rounded-md border border-slate-700/30 block">Open</span>
+                                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest bg-slate-900/20 px-3 py-1.5 rounded-md border border-slate-700/20 block">Open</span>
                               </div>
                             )}
                           </td>

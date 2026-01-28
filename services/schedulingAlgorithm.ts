@@ -56,20 +56,20 @@ export function generateFixedOnlySchedule(
     shiftsTemplate: Shift[],
     fixedAssignments: FixedAssignment[],
     closedShifts: ClosedShift[],
-    weeksToGenerate: number = 4,
+    weeksToGenerate: number = 5,
     specificDay?: DayOfWeek,
     dailyOverrides: DailyOverride[] = []
 ): Schedule {
   const schedule: Schedule = [];
-  const closedShiftsSet = new Set(closedShifts.map(cs => `${cs.week}-${cs.day}-${cs.floor}-${cs.bar}`));
+  const closedShiftsSet = new Set(closedShifts.map(cs => `${cs.week}-${cs.day}-${cs.floor.trim()}-${cs.bar.trim()}`));
 
-  // 1. Setup blank structure
+  // 1. Setup blank structure from template
   for (let week = 1; week <= weeksToGenerate; week++) {
     const weekString = `Week_${week}` as const;
     shiftsTemplate.forEach(shift => {
       if (specificDay && shift.day !== specificDay && !(specificDay === 'Sun' && shift.day === 'Sun_Night')) return;
       
-      const shiftIdentifier = `${weekString}-${shift.day}-${shift.floor}-${shift.bar}`;
+      const shiftIdentifier = `${weekString}-${shift.day}-${shift.floor.trim()}-${shift.bar.trim()}`;
       if (!closedShiftsSet.has(shiftIdentifier)) {
           schedule.push({
             week,
@@ -85,7 +85,7 @@ export function generateFixedOnlySchedule(
   // 2. Apply Overrides (Daily)
   if (specificDay) {
     dailyOverrides.forEach(d => {
-      const shift = schedule.find(s => s.week === 1 && s.day === d.day && s.floor === d.floor && s.bar === d.bar);
+      const shift = schedule.find(s => s.week === 1 && s.day === d.day && s.floor.trim() === d.floor.trim() && s.bar.trim() === d.bar.trim());
       if (shift && !shift.bartenders.some(b => b.name === d.name)) {
         shift.bartenders.push({ name: d.name, role: 'Fixed' });
       }
@@ -98,8 +98,21 @@ export function generateFixedOnlySchedule(
     if (weekNum > weeksToGenerate) return;
     if (specificDay && fa.day !== specificDay && !(specificDay === 'Sun' && fa.day === 'Sun_Night')) return;
 
-    const shift = schedule.find(s => s.week === weekNum && s.day === fa.day && s.floor === fa.floor && s.bar === fa.bar);
-    if (shift && !shift.bartenders.some(b => b.name === fa.name)) {
+    let shift = schedule.find(s => s.week === weekNum && s.day === fa.day && s.floor.trim() === fa.floor.trim() && s.bar.trim() === fa.bar.trim());
+    
+    // BUG FIX: If the manual assignment is for a shift NOT in the template, create it anyway
+    if (!shift) {
+        shift = {
+            week: weekNum,
+            day: fa.day,
+            floor: fa.floor,
+            bar: fa.bar,
+            bartenders: []
+        };
+        schedule.push(shift);
+    }
+
+    if (!shift.bartenders.some(b => b.name === fa.name)) {
       shift.bartenders.push({ name: fa.name, role: 'Fixed' });
     }
   });
@@ -123,66 +136,24 @@ export function generateSchedule(
     targetShifts: TargetShifts,
     timeOffRequests: TimeOffRequest[],
     closedShifts: ClosedShift[],
-    weeksToGenerate: number = 4,
+    weeksToGenerate: number = 5,
     specificDay?: DayOfWeek,
     dailyOverrides: DailyOverride[] = [],
     calendarStartDate: string = '' // YYYY-MM-DD
 ): Schedule {
-  const schedule: Schedule = [];
-  const shiftCounts: Record<string, number> = bartenders.reduce((acc, b) => ({ ...acc, [b.name]: 0 }), {});
-  const timeOffMap = createTimeOffMap(timeOffRequests);
-  const closedShiftsSet = new Set(closedShifts.map(cs => `${cs.week}-${cs.day}-${cs.floor}-${cs.bar}`));
-  const saturday2000sWorkers = new Set<string>();
-
-  // Initialize Structure
-  for (let week = 1; week <= weeksToGenerate; week++) {
-    const weekString = `Week_${week}` as const;
-    shiftsTemplate.forEach(shift => {
-      if (specificDay && shift.day !== specificDay && !(specificDay === 'Sun' && shift.day === 'Sun_Night')) return;
-      const shiftIdentifier = `${weekString}-${shift.day}-${shift.floor}-${shift.bar}`;
-      if (!closedShiftsSet.has(shiftIdentifier)) {
-          schedule.push({
-            week,
-            day: shift.day,
-            floor: shift.floor,
-            bar: shift.bar,
-            bartenders: [],
-          });
-      }
-    });
-  }
-
-  // Apply Fixed/Overrides first
-  const activeFixedAssignments: (FixedAssignment | DailyOverride)[] = [];
-  const overrideKeys = new Set<string>();
-
-  if (specificDay && dailyOverrides.length > 0) {
-      dailyOverrides.forEach(d => {
-          overrideKeys.add(`${d.floor}-${d.bar}-${d.day}`);
-          activeFixedAssignments.push(d);
-      });
-  }
-
-  fixedAssignments.forEach(fa => {
-      if (specificDay) {
-        if (fa.day !== specificDay && !(specificDay === 'Sun' && fa.day === 'Sun_Night')) return;
-        if (overrideKeys.has(`${fa.floor}-${fa.bar}-${fa.day}`)) return;
-      }
-      activeFixedAssignments.push(fa);
-  });
-
-  for (const assignment of activeFixedAssignments) {
-    const weekNum = 'week' in assignment ? parseInt(assignment.week.split('_')[1]) : 1;
-    if (weekNum > weeksToGenerate) continue;
-
-    const shift = schedule.find(s => s.week === weekNum && s.day === assignment.day && s.floor === assignment.floor && s.bar === assignment.bar);
-    if (shift && !shift.bartenders.some(b => b.name === assignment.name)) {
-        shift.bartenders.push({ name: assignment.name, role: 'Fixed' });
-        if(shiftCounts[assignment.name] !== undefined) shiftCounts[assignment.name]++;
-        if (assignment.day === 'Sat' && assignment.floor === "2000's") saturday2000sWorkers.add(assignment.name);
-    }
-  }
+  // Use the robust structure builder
+  const schedule = generateFixedOnlySchedule(shiftsTemplate, fixedAssignments, closedShifts, weeksToGenerate, specificDay, dailyOverrides);
   
+  const shiftCounts: Record<string, number> = bartenders.reduce((acc, b) => ({ ...acc, [b.name]: 0 }), {});
+  // Pre-fill shift counts from fixed assignments
+  schedule.forEach(s => s.bartenders.forEach(b => { if(shiftCounts[b.name] !== undefined) shiftCounts[b.name]++; }));
+
+  const timeOffMap = createTimeOffMap(timeOffRequests);
+  const saturday2000sWorkers = new Set<string>();
+  
+  // Identify Sat 2000s workers from fixed assignments
+  schedule.filter(s => s.day === 'Sat' && s.floor === "2000's").forEach(s => s.bartenders.forEach(b => saturday2000sWorkers.add(b.name)));
+
   // Fill remaining slots
   for (let week = 1; week <= weeksToGenerate; week++) {
     const shiftsForWeek = schedule.filter(s => s.week === week).sort((a,b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day));
@@ -194,8 +165,8 @@ export function generateSchedule(
       const scheduledThisDay = new Set<string>();
       schedule.filter(s => s.week === week && s.day === day).forEach(s => s.bartenders.forEach(b => scheduledThisDay.add(b.name)));
       
-      const shiftInfo = shiftsTemplate.find(t => t.day === shift.day && t.floor === shift.floor && t.bar === shift.bar);
-      const bartendersNeeded = shiftInfo ? shiftInfo.bartendersNeeded : shift.bartenders.length;
+      const shiftInfo = shiftsTemplate.find(t => t.day === shift.day && t.floor.trim() === shift.floor.trim() && t.bar.trim() === shift.bar.trim());
+      const bartendersNeeded = shiftInfo ? shiftInfo.bartendersNeeded : 1;
       const neededCount = bartendersNeeded - shift.bartenders.length;
       if (neededCount <= 0) return;
 

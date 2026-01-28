@@ -61,7 +61,7 @@ const App: React.FC = () => {
   
   useEffect(() => {
     if (generationMode === 'monthly') setWeeksToGenerate(5);
-    else setWeeksToGenerate(1);
+    else if (generationMode === 'weekly') setWeeksToGenerate(1);
   }, [generationMode]);
 
   useEffect(() => window.localStorage.setItem('bartenders', JSON.stringify(bartenders)), [bartenders]);
@@ -145,18 +145,15 @@ const App: React.FC = () => {
     if (!schedule) return;
 
     // 1. Update Fixed Assignments
-    // We want to remove the specific manual rule for the old location and add/update it for the new one
     setFixedAssignments(prev => {
-      // Filter out the rule that matches the bartender at the 'from' location
       const filtered = prev.filter(fa => 
         !(fa.name === bartenderName && 
           parseInt(fa.week.split('_')[1]) === from.week && 
           fa.day === from.day && 
-          fa.floor === from.floor && 
-          fa.bar === from.bar)
+          fa.floor.trim() === from.floor.trim() && 
+          fa.bar.trim() === from.bar.trim())
       );
       
-      // Add the new rule for the 'to' location
       const newRule: FixedAssignment = {
         name: bartenderName,
         week: `Week_${to.week}` as any,
@@ -168,17 +165,16 @@ const App: React.FC = () => {
       return [...filtered, newRule];
     });
 
-    // 2. Update current schedule view state so UI updates immediately
+    // 2. Immediate UI Update
     setSchedule(prev => {
       if (!prev) return null;
       return prev.map(entry => {
-        // Remove from original
-        if (entry.week === from.week && entry.day === from.day && entry.floor === from.floor && entry.bar === from.bar) {
+        // Remove from original cell
+        if (entry.week === from.week && entry.day === from.day && entry.floor.trim() === from.floor.trim() && entry.bar.trim() === from.bar.trim()) {
           return { ...entry, bartenders: entry.bartenders.filter(b => b.name !== bartenderName) };
         }
-        // Add to new
-        if (entry.week === to.week && entry.day === to.day && entry.floor === to.floor && entry.bar === to.bar) {
-          // Prevent duplicates
+        // Add to destination cell
+        if (entry.week === to.week && entry.day === to.day && entry.floor.trim() === to.floor.trim() && entry.bar.trim() === to.bar.trim()) {
           if (entry.bartenders.some(b => b.name === bartenderName)) return entry;
           return { ...entry, bartenders: [...entry.bartenders, { name: bartenderName, role: 'Fixed' }] };
         }
