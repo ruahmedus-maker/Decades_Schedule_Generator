@@ -137,6 +137,51 @@ const App: React.FC = () => {
     }, 50);
   }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode, weeksToGenerate, dailyOverrides, getSpecificDay, startDate]);
   
+  const handleAssignBartender = useCallback((
+    week: number, day: DayOfWeek, floor: string, bar: string, bartenderName: string | null
+  ) => {
+    if (!schedule) return;
+
+    // 1. Update Fixed Assignments State
+    setFixedAssignments(prev => {
+      // Remove any existing manual rules for this exact shift slot
+      const filtered = prev.filter(fa => 
+        !(parseInt(fa.week.split('_')[1]) === week && 
+          fa.day === day && 
+          fa.floor.trim() === floor.trim() && 
+          fa.bar.trim() === bar.trim())
+      );
+      
+      // If we are assigning a specific name (not clearing)
+      if (bartenderName) {
+        const newRule: FixedAssignment = {
+          name: bartenderName,
+          week: `Week_${week}` as any,
+          day: day,
+          floor: floor,
+          bar: bar
+        };
+        return [...filtered, newRule];
+      }
+      return filtered;
+    });
+
+    // 2. Update Schedule View State immediately
+    setSchedule(prev => {
+      if (!prev) return null;
+      return prev.map(entry => {
+        if (entry.week === week && entry.day === day && entry.floor.trim() === floor.trim() && entry.bar.trim() === bar.trim()) {
+          if (!bartenderName) return { ...entry, bartenders: [] };
+          // If shift can take multiple, we add it. For simple overwrite or slot filling:
+          // Here we check if bartender already exists to prevent dupes in same slot
+          if (entry.bartenders.some(b => b.name === bartenderName)) return entry;
+          return { ...entry, bartenders: [...entry.bartenders, { name: bartenderName, role: 'Fixed' }] };
+        }
+        return entry;
+      });
+    });
+  }, [schedule]);
+
   const handleMoveAssignment = useCallback((
     from: { week: number, day: DayOfWeek, floor: string, bar: string },
     to: { week: number, day: DayOfWeek, floor: string, bar: string },
@@ -302,6 +347,8 @@ const App: React.FC = () => {
                     schedule={schedule} 
                     startDate={effectiveStartDate} 
                     onMoveAssignment={handleMoveAssignment}
+                    onAssignBartender={handleAssignBartender}
+                    bartenders={bartenders}
                   />
                 </>
               ) : (

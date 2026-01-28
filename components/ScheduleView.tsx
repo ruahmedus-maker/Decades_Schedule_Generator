@@ -1,22 +1,41 @@
 
-import React, { useMemo, useState } from 'react';
-import type { Schedule, DayOfWeek, ScheduledBartender } from '../types';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+import type { Schedule, DayOfWeek, ScheduledBartender, Bartender } from '../types';
+import { PlusIcon } from './icons/PlusIcon';
+import { TrashIcon } from './icons/TrashIcon';
 
 interface ScheduleViewProps {
   schedule: Schedule;
   startDate?: string;
+  bartenders?: Bartender[];
   onMoveAssignment?: (
     from: { week: number, day: DayOfWeek, floor: string, bar: string },
     to: { week: number, day: DayOfWeek, floor: string, bar: string },
     bartenderName: string
+  ) => void;
+  onAssignBartender?: (
+    week: number, day: DayOfWeek, floor: string, bar: string, bartenderName: string | null
   ) => void;
 }
 
 const DAY_ORDER: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Sun_Night'];
 const FLOOR_ORDER = ['Rooftop', 'Hip Hop', "2010's", "2000's"];
 
-const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMoveAssignment }) => {
+const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMoveAssignment, onAssignBartender, bartenders = [] }) => {
   const [dragOverCell, setDragOverCell] = useState<string | null>(null);
+  const [editingCell, setEditingCell] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setEditingCell(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Group data and calculate weekly counts for badges
   const groupedData = useMemo(() => {
@@ -89,6 +108,17 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
     }
   };
 
+  const toggleEditing = (cellKey: string) => {
+    setEditingCell(prev => prev === cellKey ? null : cellKey);
+  }
+
+  const handleQuickAssign = (week: number, day: DayOfWeek, floor: string, bar: string, name: string | null) => {
+    if (onAssignBartender) {
+      onAssignBartender(week, day, floor, bar, name);
+    }
+    setEditingCell(null);
+  }
+
   return (
     <div className="space-y-8 select-none">
       {groupedData.map(({ week, grid, days, uniqueKeys, weeklyCounts }) => (
@@ -113,38 +143,44 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
                 {uniqueKeys.map((key) => {
                   const [floor, bar] = key.split(' / ');
                   return (
-                    <tr key={key} className="hover:bg-slate-700/20 transition-colors group">
+                    <tr key={key} className="hover:bg-slate-700/10 transition-colors group">
                       <td className="px-6 py-4 border-r border-slate-700/50">
                         <div className="font-bold text-slate-200 group-hover:text-indigo-300 transition-colors">{floor}</div>
                         <div className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">{bar}</div>
                       </td>
                       {days.map(day => {
-                        const bartenders = grid[key][day] || [];
+                        const cellBartenders = grid[key][day] || [];
                         const cellKey = `${week}-${key}-${day}`;
                         const isOver = dragOverCell === cellKey;
+                        const isEditing = editingCell === cellKey;
                         
                         return (
                           <td 
                             key={day} 
-                            className={`px-6 py-4 text-center align-top transition-all duration-200 ${isOver ? 'bg-indigo-600/30 scale-[1.02] shadow-[inset_0_0_10px_rgba(79,70,229,0.3)]' : ''}`}
+                            className={`px-6 py-4 text-center align-top transition-all duration-200 cursor-pointer relative ${isOver ? 'bg-indigo-600/30 scale-[1.02] shadow-[inset_0_0_10px_rgba(79,70,229,0.3)]' : ''}`}
                             onDragOver={(e) => handleDragOver(e, cellKey)}
                             onDragLeave={() => setDragOverCell(null)}
                             onDrop={(e) => handleDrop(e, week, day as DayOfWeek, floor, bar)}
+                            onClick={() => toggleEditing(cellKey)}
                           >
-                            {bartenders.length > 0 ? (
+                            <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-40 transition-opacity">
+                                <PlusIcon className="w-3 h-3 text-slate-400" />
+                            </div>
+
+                            {cellBartenders.length > 0 ? (
                               <div className="space-y-3">
-                                {bartenders.map((b, idx) => (
+                                {cellBartenders.map((b, idx) => (
                                   <div 
                                     key={idx} 
                                     draggable
                                     onDragStart={(e) => handleDragStart(e, b.name, week, day, floor, bar)}
                                     className="flex flex-col items-center cursor-grab active:cursor-grabbing hover:scale-110 transition-transform duration-150"
+                                    onClick={(e) => e.stopPropagation()} // Don't trigger cell click when dragging handle
                                   >
                                     <div className="flex items-center gap-1.5 relative group/name">
                                         <span className={`font-semibold text-sm ${b.role === 'Fixed' ? 'text-amber-400' : 'text-slate-200'}`}>
                                             {b.name}
                                         </span>
-                                        {/* Weekly Shift Count Badge */}
                                         <span 
                                             className="text-[10px] bg-slate-900/80 text-indigo-400 font-bold px-1.5 py-0 rounded-full border border-indigo-500/30 shadow-sm" 
                                             title={`Total shifts this week for ${b.name}`}
@@ -162,7 +198,38 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
                               </div>
                             ) : (
                               <div className="py-2">
-                                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest bg-slate-900/20 px-3 py-1.5 rounded-md border border-slate-700/20 block">Open</span>
+                                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest bg-slate-900/10 px-3 py-1.5 rounded-md border border-slate-700/20 block">Open</span>
+                              </div>
+                            )}
+
+                            {/* Floating Dropdown for Quick Assignment */}
+                            {isEditing && (
+                              <div 
+                                ref={dropdownRef}
+                                className="absolute z-50 left-1/2 -translate-x-1/2 top-full mt-1 w-48 bg-slate-800 border border-slate-600 rounded-lg shadow-2xl overflow-hidden animate-fadeIn"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="p-2 border-b border-slate-700 bg-slate-900/50 text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                                  Assign Bartender
+                                </div>
+                                <div className="max-h-64 overflow-y-auto custom-scrollbar">
+                                  <button 
+                                    onClick={() => handleQuickAssign(week, day as DayOfWeek, floor, bar, null)}
+                                    className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-red-900/20 flex items-center gap-2 transition-colors border-b border-slate-700"
+                                  >
+                                    <TrashIcon className="w-3 h-3" /> Clear Shift
+                                  </button>
+                                  {bartenders.map(b => (
+                                    <button 
+                                      key={b.name}
+                                      onClick={() => handleQuickAssign(week, day as DayOfWeek, floor, bar, b.name)}
+                                      className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-indigo-600 transition-colors flex justify-between items-center"
+                                    >
+                                      <span>{b.name}</span>
+                                      <span className="text-[10px] text-slate-500 font-mono">T{b.tier}</span>
+                                    </button>
+                                  ))}
+                                </div>
                               </div>
                             )}
                           </td>
