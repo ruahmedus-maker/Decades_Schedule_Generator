@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
-import type { Schedule, Bartender, FixedAssignment, TargetShifts, TimeOffRequest, ClosedShift, DayOfWeek, DailyOverride } from './types';
+import type { Schedule, Bartender, FixedAssignment, TargetShifts, TimeOffRequest, ClosedShift, DayOfWeek, DailyOverride, ScheduleEntry } from './types';
 import { BARTENDERS as initialBartenders, SHIFTS_TEMPLATE, FIXED_ASSIGNMENTS as initialFixedAssignments, EARNINGS_MAP } from './data';
 import { generateSchedule, generateFixedOnlySchedule } from './services/schedulingAlgorithm';
 import { exportScheduleToHtml } from './utils/scheduleExporter';
@@ -143,38 +143,35 @@ const App: React.FC = () => {
     if (!schedule) return;
 
     // Normalize strings for safety
-    const nFloor = floor.trim();
-    const nBar = bar.trim();
+    const nFloor = (floor || '').trim();
+    const nBar = (bar || '').trim();
 
     // 1. Update Fixed Assignments State
     setFixedAssignments(prev => {
-      // If name is null, we clear the whole shift cell
       if (!bartenderName) {
         return prev.filter(fa => 
           !(parseInt(fa.week.split('_')[1]) === week && 
             fa.day === day && 
-            fa.floor.trim() === nFloor && 
-            fa.bar.trim() === nBar)
+            (fa.floor || '').trim() === nFloor && 
+            (fa.bar || '').trim() === nBar)
         );
       }
 
-      // Check if this specific bartender is already manually assigned here
       const isAlreadyAssigned = prev.some(fa => 
         fa.name === bartenderName && 
         parseInt(fa.week.split('_')[1]) === week && 
         fa.day === day && 
-        fa.floor.trim() === nFloor && 
-        fa.bar.trim() === nBar
+        (fa.floor || '').trim() === nFloor && 
+        (fa.bar || '').trim() === nBar
       );
 
-      // Toggle behavior: If they are already there, remove them. Otherwise, add them.
       if (isAlreadyAssigned) {
         return prev.filter(fa => 
           !(fa.name === bartenderName && 
             parseInt(fa.week.split('_')[1]) === week && 
             fa.day === day && 
-            fa.floor.trim() === nFloor && 
-            fa.bar.trim() === nBar)
+            (fa.floor || '').trim() === nFloor && 
+            (fa.bar || '').trim() === nBar)
         );
       }
 
@@ -185,17 +182,17 @@ const App: React.FC = () => {
         floor: nFloor,
         bar: nBar
       };
-      
       return [...prev, newRule];
     });
 
     // 2. Immediate UI Update
     setSchedule(prev => {
       if (!prev) return null;
-      return prev.map(entry => {
-        if (entry.week === week && entry.day === day && entry.floor.trim() === nFloor && entry.bar.trim() === nBar) {
+      let found = false;
+      const next = prev.map(entry => {
+        if (entry.week === week && entry.day === day && (entry.floor || '').trim() === nFloor && (entry.bar || '').trim() === nBar) {
+          found = true;
           if (!bartenderName) return { ...entry, bartenders: [] };
-          
           const isAlreadyInScheduleCell = entry.bartenders.some(b => b.name === bartenderName);
           if (isAlreadyInScheduleCell) {
              return { ...entry, bartenders: entry.bartenders.filter(b => b.name !== bartenderName) };
@@ -204,6 +201,19 @@ const App: React.FC = () => {
         }
         return entry;
       });
+
+      // BUG FIX: If no entry existed for this cell, create it now!
+      if (!found && bartenderName) {
+        const newEntry: ScheduleEntry = {
+            week,
+            day,
+            floor: nFloor,
+            bar: nBar,
+            bartenders: [{ name: bartenderName, role: 'Fixed' }]
+        };
+        return [...next, newEntry];
+      }
+      return next;
     });
   }, [schedule]);
 
@@ -220,16 +230,16 @@ const App: React.FC = () => {
         !(fa.name === bartenderName && 
           parseInt(fa.week.split('_')[1]) === from.week && 
           fa.day === from.day && 
-          fa.floor.trim() === from.floor.trim() && 
-          fa.bar.trim() === from.bar.trim())
+          (fa.floor || '').trim() === (from.floor || '').trim() && 
+          (fa.bar || '').trim() === (from.bar || '').trim())
       );
       
       const newRule: FixedAssignment = {
         name: bartenderName,
         week: `Week_${to.week}` as any,
         day: to.day,
-        floor: to.floor.trim(),
-        bar: to.bar.trim()
+        floor: (to.floor || '').trim(),
+        bar: (to.bar || '').trim()
       };
       
       return [...filtered, newRule];
@@ -238,18 +248,36 @@ const App: React.FC = () => {
     // 2. Immediate UI Update
     setSchedule(prev => {
       if (!prev) return null;
-      return prev.map(entry => {
-        // Remove from original cell
-        if (entry.week === from.week && entry.day === from.day && entry.floor.trim() === from.floor.trim() && entry.bar.trim() === from.bar.trim()) {
+      // Remove from original
+      let next = prev.map(entry => {
+        if (entry.week === from.week && entry.day === from.day && (entry.floor || '').trim() === (from.floor || '').trim() && (entry.bar || '').trim() === (from.bar || '').trim()) {
           return { ...entry, bartenders: entry.bartenders.filter(b => b.name !== bartenderName) };
         }
-        // Add to destination cell
-        if (entry.week === to.week && entry.day === to.day && entry.floor.trim() === to.floor.trim() && entry.bar.trim() === to.bar.trim()) {
+        return entry;
+      });
+
+      // Add to destination
+      let foundTo = false;
+      next = next.map(entry => {
+        if (entry.week === to.week && entry.day === to.day && (entry.floor || '').trim() === (to.floor || '').trim() && (entry.bar || '').trim() === (to.bar || '').trim()) {
+          foundTo = true;
           if (entry.bartenders.some(b => b.name === bartenderName)) return entry;
           return { ...entry, bartenders: [...entry.bartenders, { name: bartenderName, role: 'Fixed' }] };
         }
         return entry;
       });
+
+      if (!foundTo) {
+          next.push({
+              week: to.week,
+              day: to.day,
+              floor: (to.floor || '').trim(),
+              bar: (to.bar || '').trim(),
+              bartenders: [{ name: bartenderName, role: 'Fixed' }]
+          });
+      }
+
+      return next;
     });
   }, [schedule]);
 

@@ -7,6 +7,7 @@ const DAY_ORDER: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
  * Calculates a date string for a specific week and day relative to a start date.
  */
 function getShiftDate(baseDateStr: string, week: number, day: DayOfWeek): string {
+  if (!baseDateStr) return new Date().toISOString().split('T')[0];
   const date = new Date(baseDateStr + 'T00:00:00');
   const dayIndex = DAY_ORDER.indexOf(day);
   const offset = dayIndex === 7 ? 6 : dayIndex; // Sun and Sun_Night use same day offset
@@ -61,7 +62,7 @@ export function generateFixedOnlySchedule(
     dailyOverrides: DailyOverride[] = []
 ): Schedule {
   const schedule: Schedule = [];
-  const closedShiftsSet = new Set(closedShifts.map(cs => `${cs.week}-${cs.day}-${cs.floor.trim()}-${cs.bar.trim()}`));
+  const closedShiftsSet = new Set(closedShifts.map(cs => `${cs.week}-${cs.day}-${(cs.floor || '').trim()}-${(cs.bar || '').trim()}`));
 
   // 1. Setup blank structure from template
   for (let week = 1; week <= weeksToGenerate; week++) {
@@ -69,13 +70,15 @@ export function generateFixedOnlySchedule(
     shiftsTemplate.forEach(shift => {
       if (specificDay && shift.day !== specificDay && !(specificDay === 'Sun' && shift.day === 'Sun_Night')) return;
       
-      const shiftIdentifier = `${weekString}-${shift.day}-${shift.floor.trim()}-${shift.bar.trim()}`;
+      const floor = (shift.floor || '').trim();
+      const bar = (shift.bar || '').trim();
+      const shiftIdentifier = `${weekString}-${shift.day}-${floor}-${bar}`;
       if (!closedShiftsSet.has(shiftIdentifier)) {
           schedule.push({
             week,
             day: shift.day,
-            floor: shift.floor.trim(),
-            bar: shift.bar.trim(),
+            floor: floor,
+            bar: bar,
             bartenders: [],
           });
       }
@@ -88,8 +91,8 @@ export function generateFixedOnlySchedule(
       const shift = schedule.find(s => 
         s.week === 1 && 
         s.day === d.day && 
-        s.floor.trim() === d.floor.trim() && 
-        s.bar.trim() === d.bar.trim()
+        (s.floor || '').trim() === (d.floor || '').trim() && 
+        (s.bar || '').trim() === (d.bar || '').trim()
       );
       if (shift && !shift.bartenders.some(b => b.name === d.name)) {
         shift.bartenders.push({ name: d.name, role: 'Fixed' });
@@ -103,11 +106,14 @@ export function generateFixedOnlySchedule(
     if (weekNum > weeksToGenerate) return;
     if (specificDay && fa.day !== specificDay && !(specificDay === 'Sun' && fa.day === 'Sun_Night')) return;
 
+    const faFloor = (fa.floor || '').trim();
+    const faBar = (fa.bar || '').trim();
+
     let shift = schedule.find(s => 
       s.week === weekNum && 
       s.day === fa.day && 
-      s.floor.trim() === fa.floor.trim() && 
-      s.bar.trim() === fa.bar.trim()
+      (s.floor || '').trim() === faFloor && 
+      (s.bar || '').trim() === faBar
     );
     
     // If the manual assignment is for a shift NOT in the template, create it
@@ -115,8 +121,8 @@ export function generateFixedOnlySchedule(
         shift = {
             week: weekNum,
             day: fa.day,
-            floor: fa.floor.trim(),
-            bar: fa.bar.trim(),
+            floor: faFloor,
+            bar: faBar,
             bartenders: []
         };
         schedule.push(shift);
@@ -132,7 +138,7 @@ export function generateFixedOnlySchedule(
     const dayIndexA = DAY_ORDER.indexOf(a.day);
     const dayIndexB = DAY_ORDER.indexOf(b.day);
     if(dayIndexA !== dayIndexB) return dayIndexA - dayIndexB;
-    return a.floor.localeCompare(b.floor);
+    return (a.floor || '').localeCompare(b.floor || '');
   });
 }
 
@@ -162,7 +168,7 @@ export function generateSchedule(
   const saturday2000sWorkers = new Set<string>();
   
   // Identify Sat 2000s workers from fixed assignments
-  schedule.filter(s => s.day === 'Sat' && s.floor.trim() === "2000's").forEach(s => s.bartenders.forEach(b => saturday2000sWorkers.add(b.name)));
+  schedule.filter(s => s.day === 'Sat' && (s.floor || '').trim() === "2000's").forEach(s => s.bartenders.forEach(b => saturday2000sWorkers.add(b.name)));
 
   // Fill remaining slots
   for (let week = 1; week <= weeksToGenerate; week++) {
@@ -175,13 +181,13 @@ export function generateSchedule(
       const scheduledThisDay = new Set<string>();
       schedule.filter(s => s.week === week && s.day === day).forEach(s => s.bartenders.forEach(b => scheduledThisDay.add(b.name)));
       
-      const shiftInfo = shiftsTemplate.find(t => t.day === shift.day && t.floor.trim() === shift.floor.trim() && t.bar.trim() === shift.bar.trim());
+      const shiftInfo = shiftsTemplate.find(t => t.day === shift.day && (t.floor || '').trim() === (shift.floor || '').trim() && (t.bar || '').trim() === (shift.bar || '').trim());
       const bartendersNeeded = shiftInfo ? shiftInfo.bartendersNeeded : 1;
       const neededCount = bartendersNeeded - shift.bartenders.length;
       if (neededCount <= 0) return;
 
       let availableCandidates = bartenders.filter(b => isBartenderAvailable(b, shiftDate, day, timeOffMap, scheduledThisDay));
-      if (day === 'Sat' && shift.floor.trim() === "2000's") availableCandidates = availableCandidates.filter(c => !saturday2000sWorkers.has(c.name));
+      if (day === 'Sat' && (shift.floor || '').trim() === "2000's") availableCandidates = availableCandidates.filter(c => !saturday2000sWorkers.has(c.name));
 
       availableCandidates.sort((a, b) => {
           const needA = (targetShifts[a.name] || 0) - (shiftCounts[a.name] || 0);
@@ -210,7 +216,7 @@ export function generateSchedule(
           shift.bartenders.push({ name: bartender.name, role: null });
           shiftCounts[bartender.name]++;
           scheduledThisDay.add(bartender.name);
-          if (day === 'Sat' && shift.floor.trim() === "2000's") saturday2000sWorkers.add(bartender.name);
+          if (day === 'Sat' && (shift.floor || '').trim() === "2000's") saturday2000sWorkers.add(bartender.name);
       });
     });
   }
@@ -230,6 +236,6 @@ export function generateSchedule(
     const dayIndexA = DAY_ORDER.indexOf(a.day);
     const dayIndexB = DAY_ORDER.indexOf(b.day);
     if(dayIndexA !== dayIndexB) return dayIndexA - dayIndexB;
-    return a.floor.localeCompare(b.floor);
+    return (a.floor || '').localeCompare(b.floor || '');
   });
 }
