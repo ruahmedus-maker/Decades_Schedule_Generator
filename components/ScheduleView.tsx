@@ -33,11 +33,12 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
         setEditingCell(null);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
+    if (editingCell) {
+        document.addEventListener('mousedown', handleClickOutside);
+    }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [editingCell]);
 
-  // Group data and calculate weekly counts for badges
   const groupedData = useMemo(() => {
     if (!schedule.length) return [];
     const maxWeek = Math.max(...schedule.map(s => s.week));
@@ -61,7 +62,6 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
 
       const days = Array.from(daysSet).sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
 
-      // Calculate shift counts for this specific week
       const weeklyCounts: Record<string, number> = {};
       weekSchedule.forEach(entry => {
         entry.bartenders.forEach(b => {
@@ -90,7 +90,6 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
     return `${day.replace('_', ' ')} ${date.getMonth() + 1}/${date.getDate()}`;
   }
 
-  // Drag and Drop handlers
   const handleDragStart = (e: React.DragEvent, bartenderName: string, week: number, day: string, floor: string, bar: string) => {
     const dragData = { name: bartenderName, from: { week, day, floor, bar } };
     e.dataTransfer.setData('application/json', JSON.stringify(dragData));
@@ -127,7 +126,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
   }
 
   return (
-    <div className="space-y-8 select-none overflow-hidden">
+    <div className="space-y-8 select-none">
       {groupedData.map(({ week, grid, days, uniqueKeys, weeklyCounts }) => (
         <div key={week} className="animate-fadeIn">
           <div className="flex items-center gap-3 mb-4 px-1">
@@ -136,11 +135,11 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
           </div>
           <div className="overflow-x-auto rounded-xl border border-slate-700/50 bg-slate-800/30 shadow-inner max-h-[800px] custom-scrollbar">
             <table className="w-full min-w-[900px] text-sm text-left border-separate border-spacing-0">
-              <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 sticky top-0 z-[30]">
+              <thead className="text-xs text-slate-400 uppercase bg-slate-900 sticky top-0 z-[40]">
                 <tr>
-                  <th className="px-6 py-4 font-bold border-r border-b border-slate-700/50 bg-slate-900 sticky left-0 z-[40]">Shift</th>
+                  <th className="px-6 py-4 font-bold border-r border-b border-slate-700/50 bg-slate-900 sticky left-0 z-[50]">Shift</th>
                   {days.map(day => (
-                    <th key={day} className="px-6 py-4 text-center border-b border-slate-700/50 bg-slate-900">
+                    <th key={day} className="px-6 py-4 text-center border-b border-slate-700/50">
                       {startDate ? getFormattedDate(startDate, day as DayOfWeek, week) : day.replace('_', ' ')}
                     </th>
                   ))}
@@ -151,7 +150,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
                   const [floor, bar] = key.split(' / ');
                   return (
                     <tr key={key} className="hover:bg-slate-700/10 transition-colors group">
-                      <td className="px-6 py-4 border-r border-slate-700/50 font-medium sticky left-0 z-[20] bg-slate-800 group-hover:bg-slate-700 transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.2)]">
+                      <td className="px-6 py-4 border-r border-slate-700/50 font-medium sticky left-0 z-[30] bg-slate-800 group-hover:bg-slate-700 transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.2)]">
                         <div className="font-bold text-slate-200 group-hover:text-indigo-300 transition-colors">{floor}</div>
                         <div className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">{bar}</div>
                       </td>
@@ -160,28 +159,23 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
                         const cellKey = `${week}-${key}-${day}`;
                         const isOver = dragOverCell === cellKey;
                         const isEditing = editingCell === cellKey;
-                        
-                        // Dropdown direction logic
                         const isLastRows = rowIndex > uniqueKeys.length - 4;
                         
                         return (
                           <td 
                             key={day} 
-                            className={`px-6 py-4 text-center align-top transition-all duration-150 cursor-pointer relative border-b border-slate-700/30 ${isOver ? 'bg-indigo-600/30 shadow-[inset_0_0_12px_rgba(79,70,229,0.3)]' : 'hover:bg-slate-700/20'}`}
+                            className={`px-6 py-4 text-center align-top transition-all duration-150 cursor-pointer relative border-b border-slate-700/30 ${isOver ? 'bg-indigo-600/30 shadow-[inset_0_0_12px_rgba(79,70,229,0.3)]' : 'hover:bg-slate-700/20'} ${isEditing ? 'bg-indigo-900/10' : ''}`}
                             onDragOver={(e) => handleDragOver(e, cellKey)}
                             onDragLeave={() => setDragOverCell(null)}
                             onDrop={(e) => handleDrop(e, week, day as DayOfWeek, floor, bar)}
-                            onClick={(e) => {
-                                e.preventDefault();
-                                toggleEditing(cellKey);
-                            }}
+                            onClick={() => toggleEditing(cellKey)}
                           >
-                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-40 transition-opacity">
+                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-40 transition-opacity pointer-events-none">
                                 <PlusIcon className="w-4 h-4 text-slate-400" />
                             </div>
 
                             {cellBartenders.length > 0 ? (
-                              <div className="space-y-3 pointer-events-none">
+                              <div className="space-y-3">
                                 {cellBartenders.map((b, idx) => (
                                   <div 
                                     key={idx} 
@@ -190,8 +184,11 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
                                         e.stopPropagation(); 
                                         handleDragStart(e, b.name, week, day, floor, bar);
                                     }}
-                                    className="flex flex-col items-center cursor-grab active:cursor-grabbing hover:brightness-125 transition-all duration-150 pointer-events-auto"
-                                    onClick={(e) => e.stopPropagation()} 
+                                    className="flex flex-col items-center cursor-grab active:cursor-grabbing hover:brightness-125 transition-all duration-150"
+                                    onClick={(e) => {
+                                        // Allow triggering the menu from clicking names too
+                                        // We don't stop propagation here to let the cell handle it
+                                    }} 
                                   >
                                     <div className="flex items-center gap-1.5 relative group/name">
                                         <span className={`font-semibold text-sm ${b.role === 'Fixed' ? 'text-amber-400' : 'text-slate-200'}`}>
@@ -199,7 +196,6 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
                                         </span>
                                         <span 
                                             className="text-[10px] bg-slate-900/80 text-indigo-400 font-bold px-1.5 py-0 rounded-full border border-indigo-500/30 shadow-sm" 
-                                            title={`Total shifts this week for ${b.name}`}
                                         >
                                             {weeklyCounts[b.name] || 0}
                                         </span>
@@ -213,24 +209,19 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
                                 ))}
                               </div>
                             ) : (
-                              <div className="py-2 pointer-events-none">
-                                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest bg-slate-900/10 px-3 py-1.5 rounded-md border border-slate-700/20 block hover:border-slate-500/50 transition-colors">Open</span>
+                              <div className="py-2">
+                                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest bg-slate-900/10 px-3 py-1.5 rounded-md border border-slate-700/20 block">Open</span>
                               </div>
                             )}
 
-                            {/* Floating Dropdown for Quick Assignment */}
                             {isEditing && (
                               <div 
                                 ref={dropdownRef}
-                                className={`fixed z-[100] transform -translate-x-1/2 mt-2 w-56 bg-slate-800 border border-slate-600 rounded-lg shadow-[0_15px_45px_rgba(0,0,0,0.8)] overflow-hidden animate-fadeIn`}
-                                style={{
-                                    left: '50%',
-                                    top: isLastRows ? 'auto' : 'auto', // CSS positioning is handled by simple absolute/relative if not using a portal
-                                }}
+                                className={`absolute z-[100] left-1/2 -translate-x-1/2 ${isLastRows ? 'bottom-full mb-2' : 'top-full mt-2'} w-56 bg-slate-800 border border-slate-600 rounded-lg shadow-[0_15px_45px_rgba(0,0,0,0.8)] overflow-hidden animate-fadeIn`}
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <div className="p-3 border-b border-slate-700 bg-slate-900/90 text-[10px] uppercase font-bold text-slate-400 tracking-wider flex justify-between items-center">
-                                  <span>Manage Shift</span>
+                                  <span>Quick Assign</span>
                                   <span className="text-slate-600 text-[8px]">{day}</span>
                                 </div>
                                 <div className="max-h-80 overflow-y-auto custom-scrollbar bg-slate-800">
@@ -238,7 +229,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
                                     onClick={() => handleQuickAssign(week, day as DayOfWeek, floor, bar, null)}
                                     className="w-full text-left px-4 py-3 text-xs text-red-400 hover:bg-red-900/30 flex items-center gap-2 transition-colors border-b border-slate-700"
                                   >
-                                    <TrashIcon className="w-4 h-4" /> Clear Cell
+                                    <TrashIcon className="w-4 h-4" /> Clear All Assignments
                                   </button>
                                   <div className="bg-slate-900/10 py-1">
                                     {bartenders.map(b => {

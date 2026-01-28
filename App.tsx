@@ -202,7 +202,6 @@ const App: React.FC = () => {
         return entry;
       });
 
-      // BUG FIX: If no entry existed for this cell, create it now!
       if (!found && bartenderName) {
         const newEntry: ScheduleEntry = {
             week,
@@ -248,7 +247,6 @@ const App: React.FC = () => {
     // 2. Immediate UI Update
     setSchedule(prev => {
       if (!prev) return null;
-      // Remove from original
       let next = prev.map(entry => {
         if (entry.week === from.week && entry.day === from.day && (entry.floor || '').trim() === (from.floor || '').trim() && (entry.bar || '').trim() === (from.bar || '').trim()) {
           return { ...entry, bartenders: entry.bartenders.filter(b => b.name !== bartenderName) };
@@ -256,7 +254,6 @@ const App: React.FC = () => {
         return entry;
       });
 
-      // Add to destination
       let foundTo = false;
       next = next.map(entry => {
         if (entry.week === to.week && entry.day === to.day && (entry.floor || '').trim() === (to.floor || '').trim() && (entry.bar || '').trim() === (to.bar || '').trim()) {
@@ -281,6 +278,15 @@ const App: React.FC = () => {
     });
   }, [schedule]);
 
+  const getEffectiveMondayDate = () => {
+    if (!startDate) return undefined;
+    const d = new Date(startDate + 'T00:00:00');
+    const monday = getMonday(d);
+    return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+  };
+
+  const effectiveStartDate = getEffectiveMondayDate();
+
   const scheduleTitle = useCallback(() => {
     if (!startDate) return 'Schedule';
     const dateObj = new Date(startDate + 'T00:00:00');
@@ -291,15 +297,6 @@ const App: React.FC = () => {
     endDate.setDate(endDate.getDate() + (weeksToGenerate * 7) - 1); 
     return `${startMonday.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
   }, [startDate, generationMode, weeksToGenerate])();
-
-  const getEffectiveMondayDate = () => {
-    if (!startDate) return undefined;
-    const d = new Date(startDate + 'T00:00:00');
-    const monday = getMonday(d);
-    return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
-  };
-
-  const effectiveStartDate = getEffectiveMondayDate();
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-200 font-sans p-4 sm:p-6 lg:p-8">
