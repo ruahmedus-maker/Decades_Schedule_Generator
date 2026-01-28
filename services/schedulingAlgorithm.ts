@@ -74,8 +74,8 @@ export function generateFixedOnlySchedule(
           schedule.push({
             week,
             day: shift.day,
-            floor: shift.floor,
-            bar: shift.bar,
+            floor: shift.floor.trim(),
+            bar: shift.bar.trim(),
             bartenders: [],
           });
       }
@@ -85,7 +85,12 @@ export function generateFixedOnlySchedule(
   // 2. Apply Overrides (Daily)
   if (specificDay) {
     dailyOverrides.forEach(d => {
-      const shift = schedule.find(s => s.week === 1 && s.day === d.day && s.floor.trim() === d.floor.trim() && s.bar.trim() === d.bar.trim());
+      const shift = schedule.find(s => 
+        s.week === 1 && 
+        s.day === d.day && 
+        s.floor.trim() === d.floor.trim() && 
+        s.bar.trim() === d.bar.trim()
+      );
       if (shift && !shift.bartenders.some(b => b.name === d.name)) {
         shift.bartenders.push({ name: d.name, role: 'Fixed' });
       }
@@ -98,15 +103,20 @@ export function generateFixedOnlySchedule(
     if (weekNum > weeksToGenerate) return;
     if (specificDay && fa.day !== specificDay && !(specificDay === 'Sun' && fa.day === 'Sun_Night')) return;
 
-    let shift = schedule.find(s => s.week === weekNum && s.day === fa.day && s.floor.trim() === fa.floor.trim() && s.bar.trim() === fa.bar.trim());
+    let shift = schedule.find(s => 
+      s.week === weekNum && 
+      s.day === fa.day && 
+      s.floor.trim() === fa.floor.trim() && 
+      s.bar.trim() === fa.bar.trim()
+    );
     
-    // BUG FIX: If the manual assignment is for a shift NOT in the template, create it anyway
+    // If the manual assignment is for a shift NOT in the template, create it
     if (!shift) {
         shift = {
             week: weekNum,
             day: fa.day,
-            floor: fa.floor,
-            bar: fa.bar,
+            floor: fa.floor.trim(),
+            bar: fa.bar.trim(),
             bartenders: []
         };
         schedule.push(shift);
@@ -152,7 +162,7 @@ export function generateSchedule(
   const saturday2000sWorkers = new Set<string>();
   
   // Identify Sat 2000s workers from fixed assignments
-  schedule.filter(s => s.day === 'Sat' && s.floor === "2000's").forEach(s => s.bartenders.forEach(b => saturday2000sWorkers.add(b.name)));
+  schedule.filter(s => s.day === 'Sat' && s.floor.trim() === "2000's").forEach(s => s.bartenders.forEach(b => saturday2000sWorkers.add(b.name)));
 
   // Fill remaining slots
   for (let week = 1; week <= weeksToGenerate; week++) {
@@ -171,7 +181,7 @@ export function generateSchedule(
       if (neededCount <= 0) return;
 
       let availableCandidates = bartenders.filter(b => isBartenderAvailable(b, shiftDate, day, timeOffMap, scheduledThisDay));
-      if (day === 'Sat' && shift.floor === "2000's") availableCandidates = availableCandidates.filter(c => !saturday2000sWorkers.has(c.name));
+      if (day === 'Sat' && shift.floor.trim() === "2000's") availableCandidates = availableCandidates.filter(c => !saturday2000sWorkers.has(c.name));
 
       availableCandidates.sort((a, b) => {
           const needA = (targetShifts[a.name] || 0) - (shiftCounts[a.name] || 0);
@@ -200,7 +210,7 @@ export function generateSchedule(
           shift.bartenders.push({ name: bartender.name, role: null });
           shiftCounts[bartender.name]++;
           scheduledThisDay.add(bartender.name);
-          if (day === 'Sat' && shift.floor === "2000's") saturday2000sWorkers.add(bartender.name);
+          if (day === 'Sat' && shift.floor.trim() === "2000's") saturday2000sWorkers.add(bartender.name);
       });
     });
   }

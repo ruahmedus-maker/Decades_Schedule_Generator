@@ -142,39 +142,64 @@ const App: React.FC = () => {
   ) => {
     if (!schedule) return;
 
+    // Normalize strings for safety
+    const nFloor = floor.trim();
+    const nBar = bar.trim();
+
     // 1. Update Fixed Assignments State
     setFixedAssignments(prev => {
-      // Remove any existing manual rules for this exact shift slot
-      const filtered = prev.filter(fa => 
-        !(parseInt(fa.week.split('_')[1]) === week && 
-          fa.day === day && 
-          fa.floor.trim() === floor.trim() && 
-          fa.bar.trim() === bar.trim())
-      );
-      
-      // If we are assigning a specific name (not clearing)
-      if (bartenderName) {
-        const newRule: FixedAssignment = {
-          name: bartenderName,
-          week: `Week_${week}` as any,
-          day: day,
-          floor: floor,
-          bar: bar
-        };
-        return [...filtered, newRule];
+      // If name is null, we clear the whole shift cell
+      if (!bartenderName) {
+        return prev.filter(fa => 
+          !(parseInt(fa.week.split('_')[1]) === week && 
+            fa.day === day && 
+            fa.floor.trim() === nFloor && 
+            fa.bar.trim() === nBar)
+        );
       }
-      return filtered;
+
+      // Check if this specific bartender is already manually assigned here
+      const isAlreadyAssigned = prev.some(fa => 
+        fa.name === bartenderName && 
+        parseInt(fa.week.split('_')[1]) === week && 
+        fa.day === day && 
+        fa.floor.trim() === nFloor && 
+        fa.bar.trim() === nBar
+      );
+
+      // Toggle behavior: If they are already there, remove them. Otherwise, add them.
+      if (isAlreadyAssigned) {
+        return prev.filter(fa => 
+          !(fa.name === bartenderName && 
+            parseInt(fa.week.split('_')[1]) === week && 
+            fa.day === day && 
+            fa.floor.trim() === nFloor && 
+            fa.bar.trim() === nBar)
+        );
+      }
+
+      const newRule: FixedAssignment = {
+        name: bartenderName,
+        week: `Week_${week}` as any,
+        day: day,
+        floor: nFloor,
+        bar: nBar
+      };
+      
+      return [...prev, newRule];
     });
 
-    // 2. Update Schedule View State immediately
+    // 2. Immediate UI Update
     setSchedule(prev => {
       if (!prev) return null;
       return prev.map(entry => {
-        if (entry.week === week && entry.day === day && entry.floor.trim() === floor.trim() && entry.bar.trim() === bar.trim()) {
+        if (entry.week === week && entry.day === day && entry.floor.trim() === nFloor && entry.bar.trim() === nBar) {
           if (!bartenderName) return { ...entry, bartenders: [] };
-          // If shift can take multiple, we add it. For simple overwrite or slot filling:
-          // Here we check if bartender already exists to prevent dupes in same slot
-          if (entry.bartenders.some(b => b.name === bartenderName)) return entry;
+          
+          const isAlreadyInScheduleCell = entry.bartenders.some(b => b.name === bartenderName);
+          if (isAlreadyInScheduleCell) {
+             return { ...entry, bartenders: entry.bartenders.filter(b => b.name !== bartenderName) };
+          }
           return { ...entry, bartenders: [...entry.bartenders, { name: bartenderName, role: 'Fixed' }] };
         }
         return entry;
@@ -203,8 +228,8 @@ const App: React.FC = () => {
         name: bartenderName,
         week: `Week_${to.week}` as any,
         day: to.day,
-        floor: to.floor,
-        bar: to.bar
+        floor: to.floor.trim(),
+        bar: to.bar.trim()
       };
       
       return [...filtered, newRule];

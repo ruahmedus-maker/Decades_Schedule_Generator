@@ -57,7 +57,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
             weeklyCounts[b.name] = (weeklyCounts[b.name] || 0) + 1;
         });
         
-        const key = `${entry.floor} / ${entry.bar}`;
+        const key = `${entry.floor.trim()} / ${entry.bar.trim()}`;
         if (!grid[key]) grid[key] = {};
         grid[key][entry.day] = entry.bartenders;
       });
@@ -116,6 +116,8 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
     if (onAssignBartender) {
       onAssignBartender(week, day, floor, bar, name);
     }
+    // We don't close the menu automatically if adding multiple, 
+    // but the user's logic might prefer closing it. Let's close for simplicity.
     setEditingCell(null);
   }
 
@@ -128,23 +130,23 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
              <div className="h-[1px] flex-1 bg-slate-700/50"></div>
           </div>
           <div className="overflow-x-auto rounded-xl border border-slate-700/50 bg-slate-800/30 shadow-inner">
-            <table className="w-full min-w-[900px] text-sm text-left">
-              <thead className="text-xs text-slate-400 uppercase bg-slate-900/50">
+            <table className="w-full min-w-[900px] text-sm text-left border-separate border-spacing-0">
+              <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 sticky top-0 z-20">
                 <tr>
-                  <th className="px-6 py-4 font-bold border-r border-slate-700/50">Shift</th>
+                  <th className="px-6 py-4 font-bold border-r border-b border-slate-700/50 bg-slate-900/50">Shift</th>
                   {days.map(day => (
-                    <th key={day} className="px-6 py-4 text-center">
+                    <th key={day} className="px-6 py-4 text-center border-b border-slate-700/50 bg-slate-900/50">
                       {startDate ? getFormattedDate(startDate, day as DayOfWeek, week) : day.replace('_', ' ')}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700/50">
-                {uniqueKeys.map((key) => {
+                {uniqueKeys.map((key, rowIndex) => {
                   const [floor, bar] = key.split(' / ');
                   return (
                     <tr key={key} className="hover:bg-slate-700/10 transition-colors group">
-                      <td className="px-6 py-4 border-r border-slate-700/50">
+                      <td className="px-6 py-4 border-r border-slate-700/50 font-medium sticky left-0 z-10 bg-slate-800/95 group-hover:bg-slate-700/20 transition-colors">
                         <div className="font-bold text-slate-200 group-hover:text-indigo-300 transition-colors">{floor}</div>
                         <div className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">{bar}</div>
                       </td>
@@ -154,6 +156,9 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
                         const isOver = dragOverCell === cellKey;
                         const isEditing = editingCell === cellKey;
                         
+                        // Decide if dropdown should open upwards or downwards
+                        const isLastRows = rowIndex > uniqueKeys.length - 4;
+                        
                         return (
                           <td 
                             key={day} 
@@ -161,21 +166,27 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
                             onDragOver={(e) => handleDragOver(e, cellKey)}
                             onDragLeave={() => setDragOverCell(null)}
                             onDrop={(e) => handleDrop(e, week, day as DayOfWeek, floor, bar)}
-                            onClick={() => toggleEditing(cellKey)}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                toggleEditing(cellKey);
+                            }}
                           >
-                            <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-40 transition-opacity">
-                                <PlusIcon className="w-3 h-3 text-slate-400" />
+                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-40 transition-opacity">
+                                <PlusIcon className="w-4 h-4 text-slate-400" />
                             </div>
 
                             {cellBartenders.length > 0 ? (
-                              <div className="space-y-3">
+                              <div className="space-y-3 pointer-events-none">
                                 {cellBartenders.map((b, idx) => (
                                   <div 
                                     key={idx} 
                                     draggable
-                                    onDragStart={(e) => handleDragStart(e, b.name, week, day, floor, bar)}
-                                    className="flex flex-col items-center cursor-grab active:cursor-grabbing hover:scale-110 transition-transform duration-150"
-                                    onClick={(e) => e.stopPropagation()} // Don't trigger cell click when dragging handle
+                                    onDragStart={(e) => {
+                                        e.stopPropagation(); // Allow dragging handles
+                                        handleDragStart(e, b.name, week, day, floor, bar);
+                                    }}
+                                    className="flex flex-col items-center cursor-grab active:cursor-grabbing hover:scale-110 transition-transform duration-150 pointer-events-auto"
+                                    onClick={(e) => e.stopPropagation()} 
                                   >
                                     <div className="flex items-center gap-1.5 relative group/name">
                                         <span className={`font-semibold text-sm ${b.role === 'Fixed' ? 'text-amber-400' : 'text-slate-200'}`}>
@@ -197,7 +208,7 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
                                 ))}
                               </div>
                             ) : (
-                              <div className="py-2">
+                              <div className="py-2 pointer-events-none">
                                 <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest bg-slate-900/10 px-3 py-1.5 rounded-md border border-slate-700/20 block">Open</span>
                               </div>
                             )}
@@ -206,29 +217,38 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
                             {isEditing && (
                               <div 
                                 ref={dropdownRef}
-                                className="absolute z-50 left-1/2 -translate-x-1/2 top-full mt-1 w-48 bg-slate-800 border border-slate-600 rounded-lg shadow-2xl overflow-hidden animate-fadeIn"
+                                className={`absolute z-[100] left-1/2 -translate-x-1/2 ${isLastRows ? 'bottom-full mb-2' : 'top-full mt-2'} w-52 bg-slate-800 border border-slate-600 rounded-lg shadow-[0_10px_40px_rgba(0,0,0,0.6)] overflow-hidden animate-fadeIn`}
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <div className="p-2 border-b border-slate-700 bg-slate-900/50 text-[10px] uppercase font-bold text-slate-500 tracking-wider">
-                                  Assign Bartender
+                                <div className="p-3 border-b border-slate-700 bg-slate-900/80 text-[10px] uppercase font-bold text-slate-400 tracking-wider flex justify-between items-center">
+                                  <span>Manage Shift</span>
+                                  <span className="text-slate-600 text-[8px]">{day} - {bar}</span>
                                 </div>
-                                <div className="max-h-64 overflow-y-auto custom-scrollbar">
+                                <div className="max-h-72 overflow-y-auto custom-scrollbar">
                                   <button 
                                     onClick={() => handleQuickAssign(week, day as DayOfWeek, floor, bar, null)}
-                                    className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-red-900/20 flex items-center gap-2 transition-colors border-b border-slate-700"
+                                    className="w-full text-left px-4 py-3 text-xs text-red-400 hover:bg-red-900/20 flex items-center gap-2 transition-colors border-b border-slate-700"
                                   >
-                                    <TrashIcon className="w-3 h-3" /> Clear Shift
+                                    <TrashIcon className="w-4 h-4" /> Clear All Assignments
                                   </button>
-                                  {bartenders.map(b => (
-                                    <button 
-                                      key={b.name}
-                                      onClick={() => handleQuickAssign(week, day as DayOfWeek, floor, bar, b.name)}
-                                      className="w-full text-left px-4 py-2 text-sm text-slate-200 hover:bg-indigo-600 transition-colors flex justify-between items-center"
-                                    >
-                                      <span>{b.name}</span>
-                                      <span className="text-[10px] text-slate-500 font-mono">T{b.tier}</span>
-                                    </button>
-                                  ))}
+                                  <div className="bg-slate-900/20 py-1">
+                                    {bartenders.map(b => {
+                                      const isCurrentlyAssigned = cellBartenders.some(cb => cb.name === b.name);
+                                      return (
+                                        <button 
+                                          key={b.name}
+                                          onClick={() => handleQuickAssign(week, day as DayOfWeek, floor, bar, b.name)}
+                                          className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex justify-between items-center ${isCurrentlyAssigned ? 'bg-indigo-900/30 text-indigo-300' : 'text-slate-200 hover:bg-indigo-600'}`}
+                                        >
+                                          <div className="flex items-center gap-2">
+                                              <span>{b.name}</span>
+                                              {isCurrentlyAssigned && <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></div>}
+                                          </div>
+                                          <span className="text-[10px] text-slate-500 font-mono">T{b.tier}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                               </div>
                             )}
