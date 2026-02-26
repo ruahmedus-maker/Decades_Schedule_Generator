@@ -55,6 +55,12 @@ const FixedShiftManager: React.FC<FixedShiftManagerProps> = ({ fixedAssignments,
   const handleRemoveAssignment = (indexToRemove: number) => {
     setFixedAssignments(prev => prev.filter((_, index) => index !== indexToRemove));
   };
+
+  const handleClearAll = () => {
+    if (window.confirm('Are you sure you want to delete all fixed shifts? This cannot be undone.')) {
+      setFixedAssignments([]);
+    }
+  };
   
   const handleFloorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newFloor = e.target.value;
@@ -68,26 +74,41 @@ const FixedShiftManager: React.FC<FixedShiftManagerProps> = ({ fixedAssignments,
 
   return (
     <div className="space-y-4">
-      <h3 className="text-base font-semibold text-slate-200">Manage Fixed Shifts</h3>
-       <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-        {fixedAssignments.map((a, index) => (
-          <div key={index} className="flex items-center justify-between bg-slate-900/50 p-2 rounded-md border border-slate-700 text-xs">
-            <div className="flex-1">
-                <span className="font-semibold text-indigo-300">{a.name}</span>
-                <span className="text-slate-400"> at </span>
-                <span className="text-slate-300">{a.floor} / {a.bar}</span>
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-semibold text-slate-200">Manage Fixed Shifts</h3>
+        {fixedAssignments.length > 0 && (
+          <button 
+            onClick={handleClearAll}
+            className="text-[10px] uppercase font-bold text-red-400 hover:text-red-300 transition-colors flex items-center gap-1"
+          >
+            <TrashIcon className="h-3 w-3" />
+            Clear All
+          </button>
+        )}
+      </div>
+       <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+        {fixedAssignments.length === 0 ? (
+          <p className="text-xs text-slate-500 italic text-center py-4">No fixed assignments found.</p>
+        ) : (
+          fixedAssignments.map((a, index) => (
+            <div key={index} className="flex items-center justify-between bg-slate-900/50 p-2 rounded-md border border-slate-700 text-xs">
+              <div className="flex-1">
+                  <span className="font-semibold text-indigo-300">{a.name}</span>
+                  <span className="text-slate-400"> at </span>
+                  <span className="text-slate-300">{a.floor} / {a.bar}</span>
+              </div>
+              <div className="text-slate-400 text-right mx-2 flex-shrink-0">
+                  {a.week.replace('_', ' ')}, {a.day.replace('_', ' ')}
+              </div>
+              <button
+                onClick={() => handleRemoveAssignment(index)}
+                className="text-slate-500 hover:text-red-400 p-1 rounded-full transition-colors"
+              >
+                <TrashIcon className="h-4 w-4" />
+              </button>
             </div>
-            <div className="text-slate-400 text-right mx-2 flex-shrink-0">
-                {a.week.replace('_', ' ')}, {a.day.replace('_', ' ')}
-            </div>
-            <button
-              onClick={() => handleRemoveAssignment(index)}
-              className="text-slate-500 hover:text-red-400 p-1 rounded-full transition-colors"
-            >
-              <TrashIcon className="h-4 w-4" />
-            </button>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       <form onSubmit={handleAddAssignment} className="space-y-2 pt-4 border-t border-slate-700">

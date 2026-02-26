@@ -16,6 +16,7 @@ import DailyOverrideManager from './components/DailyOverrideManager';
 import { DownloadIcon } from './components/icons/DownloadIcon';
 import { CalendarIcon } from './components/icons/CalendarIcon';
 import { EyeIcon } from './components/icons/EyeIcon';
+import { PlusIcon } from './components/icons/PlusIcon';
 import FloorDistributionView from './components/FloorDistributionView';
 
 const App: React.FC = () => {
@@ -107,6 +108,29 @@ const App: React.FC = () => {
       }
     }, 50);
   }, [fixedAssignments, closedShifts, generationMode, weeksToGenerate, dailyOverrides, getSpecificDay]);
+
+  const handleCreateEmptySchedule = useCallback(() => {
+    setIsLoading(true);
+    setStatusMsg('Creating empty schedule...');
+    setTimeout(() => {
+      try {
+        const generated = generateFixedOnlySchedule(
+            SHIFTS_TEMPLATE,
+            [], // Empty fixed assignments
+            closedShifts,
+            weeksToGenerate,
+            getSpecificDay(),
+            [] // Empty daily overrides
+        );
+        setSchedule(generated);
+      } catch (err) {
+        setError('Error creating empty schedule.');
+      } finally {
+        setIsLoading(false);
+        setStatusMsg(null);
+      }
+    }, 50);
+  }, [closedShifts, weeksToGenerate, getSpecificDay]);
 
   const handleGenerateSchedule = useCallback(() => {
     setIsLoading(true);
@@ -365,6 +389,14 @@ const App: React.FC = () => {
               >
                 <EyeIcon className="h-5 w-5" />
                 Preview Fixed Only
+              </button>
+              <button
+                onClick={handleCreateEmptySchedule}
+                disabled={isLoading}
+                className="w-full flex items-center justify-center gap-2 bg-slate-700 text-slate-100 font-semibold py-2.5 px-4 rounded-lg hover:bg-slate-600 transition-colors"
+              >
+                <PlusIcon className="h-5 w-5" />
+                Create Empty Schedule
               </button>
               <button
                 onClick={handleGenerateSchedule}
