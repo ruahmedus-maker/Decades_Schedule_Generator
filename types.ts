@@ -39,6 +39,15 @@ export interface ClosedShift {
   bar: string;
 }
 
+export interface ExtraShift {
+  id: string;
+  week: `Week_${1|2|3|4|5}`;
+  day: DayOfWeek;
+  floor: string;
+  bar: string;
+  bartendersNeeded: number;
+}
+
 export interface ScheduledBartender {
   name: string;
   role?: string | null;

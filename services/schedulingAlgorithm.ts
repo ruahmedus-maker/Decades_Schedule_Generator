@@ -1,5 +1,5 @@
 
-import type { Schedule, Bartender, Shift, FixedAssignment, TargetShifts, TimeOffRequest, DayOfWeek, ClosedShift, ScheduledBartender, DailyOverride } from '../types';
+import type { Schedule, Bartender, Shift, FixedAssignment, TargetShifts, TimeOffRequest, DayOfWeek, ClosedShift, ScheduledBartender, DailyOverride, ExtraShift } from '../types';
 
 const DAY_ORDER: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Sun_Night'];
 
@@ -59,7 +59,8 @@ export function generateFixedOnlySchedule(
     closedShifts: ClosedShift[],
     weeksToGenerate: number = 5,
     specificDay?: DayOfWeek,
-    dailyOverrides: DailyOverride[] = []
+    dailyOverrides: DailyOverride[] = [],
+    extraShifts: ExtraShift[] = []
 ): Schedule {
   const schedule: Schedule = [];
   const closedShiftsSet = new Set(closedShifts.map(cs => `${cs.week}-${cs.day}-${(cs.floor || '').trim()}-${(cs.bar || '').trim()}`));
@@ -67,7 +68,26 @@ export function generateFixedOnlySchedule(
   // 1. Setup blank structure from template
   for (let week = 1; week <= weeksToGenerate; week++) {
     const weekString = `Week_${week}` as const;
-    shiftsTemplate.forEach(shift => {
+    
+    // Combine template shifts with extra shifts for this week
+    const weekExtraShifts = extraShifts.filter(es => es.week === weekString);
+    const allShiftsForWeek = [...shiftsTemplate];
+    
+    weekExtraShifts.forEach(es => {
+        // Only add if not already in template for this day/floor/bar
+        const exists = allShiftsForWeek.some(ts => ts.day === es.day && (ts.floor || '').trim() === (es.floor || '').trim() && (ts.bar || '').trim() === (es.bar || '').trim());
+        if (!exists) {
+            allShiftsForWeek.push({
+                day: es.day as any,
+                floor: es.floor,
+                bar: es.bar,
+                bartendersNeeded: es.bartendersNeeded,
+                gender: null
+            });
+        }
+    });
+
+    allShiftsForWeek.forEach(shift => {
       if (specificDay && shift.day !== specificDay && !(specificDay === 'Sun' && shift.day === 'Sun_Night')) return;
       
       const floor = (shift.floor || '').trim();
@@ -76,7 +96,7 @@ export function generateFixedOnlySchedule(
       if (!closedShiftsSet.has(shiftIdentifier)) {
           schedule.push({
             week,
-            day: shift.day,
+            day: shift.day as DayOfWeek,
             floor: floor,
             bar: bar,
             bartenders: [],
@@ -155,10 +175,11 @@ export function generateSchedule(
     weeksToGenerate: number = 5,
     specificDay?: DayOfWeek,
     dailyOverrides: DailyOverride[] = [],
-    calendarStartDate: string = '' // YYYY-MM-DD
+    calendarStartDate: string = '', // YYYY-MM-DD
+    extraShifts: ExtraShift[] = []
 ): Schedule {
   // Use the robust structure builder
-  const schedule = generateFixedOnlySchedule(shiftsTemplate, fixedAssignments, closedShifts, weeksToGenerate, specificDay, dailyOverrides);
+  const schedule = generateFixedOnlySchedule(shiftsTemplate, fixedAssignments, closedShifts, weeksToGenerate, specificDay, dailyOverrides, extraShifts);
   
   const shiftCounts: Record<string, number> = bartenders.reduce((acc, b) => ({ ...acc, [b.name]: 0 }), {});
   // Pre-fill shift counts from fixed assignments
@@ -181,8 +202,12 @@ export function generateSchedule(
       const scheduledThisDay = new Set<string>();
       schedule.filter(s => s.week === week && s.day === day).forEach(s => s.bartenders.forEach(b => scheduledThisDay.add(b.name)));
       
-      const shiftInfo = shiftsTemplate.find(t => t.day === shift.day && (t.floor || '').trim() === (shift.floor || '').trim() && (t.bar || '').trim() === (shift.bar || '').trim());
-      const bartendersNeeded = shiftInfo ? shiftInfo.bartendersNeeded : 1;
+      // Find shift info from template OR extra shifts
+      const weekString = `Week_${week}` as const;
+      const extraShiftInfo = extraShifts.find(es => es.week === weekString && es.day === shift.day && (es.floor || '').trim() === (shift.floor || '').trim() && (es.bar || '').trim() === (shift.bar || '').trim());
+      const templateShiftInfo = shiftsTemplate.find(t => t.day === shift.day && (t.floor || '').trim() === (shift.floor || '').trim() && (t.bar || '').trim() === (shift.bar || '').trim());
+      
+      const bartendersNeeded = extraShiftInfo ? extraShiftInfo.bartendersNeeded : (templateShiftInfo ? templateShiftInfo.bartendersNeeded : 1);
       const neededCount = bartendersNeeded - shift.bartenders.length;
       if (neededCount <= 0) return;
 
@@ -196,7 +221,7 @@ export function generateSchedule(
           return Math.random() - 0.5;
       });
 
-      const genderConstraint = shiftInfo?.gender;
+      const genderConstraint = templateShiftInfo?.gender;
       const toAssign: Bartender[] = [];
 
       if (genderConstraint === 'MF') {

@@ -1,6 +1,6 @@
 
-import React, { useState, useCallback, useEffect } from 'react';
-import type { Schedule, Bartender, FixedAssignment, TargetShifts, TimeOffRequest, ClosedShift, DayOfWeek, DailyOverride, ScheduleEntry } from './types';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import type { Schedule, Bartender, Shift, FixedAssignment, TargetShifts, TimeOffRequest, ClosedShift, DayOfWeek, DailyOverride, ScheduleEntry, ExtraShift } from './types';
 import { BARTENDERS as initialBartenders, SHIFTS_TEMPLATE, FIXED_ASSIGNMENTS as initialFixedAssignments, EARNINGS_MAP } from './data';
 import { generateSchedule, generateFixedOnlySchedule } from './services/schedulingAlgorithm';
 import { exportScheduleToHtml } from './utils/scheduleExporter';
@@ -12,6 +12,7 @@ import WeeklyAvailabilityManager from './components/WeeklyAvailabilityManager';
 import TimeOffRequestManager from './components/TimeOffRequestManager';
 import TargetShiftsManager from './components/TargetShiftsManager';
 import EventShiftManager from './components/EventShiftManager';
+import ExtraShiftManager from './components/ExtraShiftManager';
 import DailyOverrideManager from './components/DailyOverrideManager';
 import { DownloadIcon } from './components/icons/DownloadIcon';
 import { CalendarIcon } from './components/icons/CalendarIcon';
@@ -46,16 +47,52 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [generationMode, setGenerationMode] = useState<'monthly' | 'weekly' | 'daily'>('monthly');
-  const [weeksToGenerate, setWeeksToGenerate] = useState<number>(5);
+  const [extraShifts, setExtraShifts] = useState<ExtraShift[]>(() => {
+    const saved = window.localStorage.getItem('extraShifts');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [generationMode, setGenerationMode] = useState<'monthly' | 'weekly' | 'daily'>(() => {
+    const saved = window.localStorage.getItem('generationMode');
+    return (saved as any) || 'monthly';
+  });
+
+  const [weeksToGenerate, setWeeksToGenerate] = useState<number>(() => {
+    const saved = window.localStorage.getItem('weeksToGenerate');
+    return saved ? parseInt(saved) : 5;
+  });
+
   const [startDate, setStartDate] = useState<string>(() => {
+    const saved = window.localStorage.getItem('startDate');
+    if (saved) return saved;
     const d = new Date();
     d.setDate(d.getDate() + (1 + 7 - d.getDay()) % 7);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
   
-  const [dailyOverrides, setDailyOverrides] = useState<DailyOverride[]>([]);
-  const [schedule, setSchedule] = useState<Schedule | null>(null);
+  const [dailyOverrides, setDailyOverrides] = useState<DailyOverride[]>(() => {
+    const saved = window.localStorage.getItem('dailyOverrides');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [schedule, setSchedule] = useState<Schedule | null>(() => {
+    const saved = window.localStorage.getItem('schedule');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const combinedShifts = useMemo(() => {
+    const extras: Shift[] = extraShifts.map(es => ({
+      day: es.day as any,
+      floor: es.floor,
+      bar: es.bar,
+      bartendersNeeded: es.bartendersNeeded,
+      gender: null
+    }));
+    // Filter out duplicates if an extra shift matches a template shift
+    const uniqueExtras = extras.filter(e => !SHIFTS_TEMPLATE.some(ts => ts.day === e.day && ts.floor === e.floor && ts.bar === e.bar));
+    return [...SHIFTS_TEMPLATE, ...uniqueExtras];
+  }, [extraShifts]);
+
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
@@ -70,6 +107,12 @@ const App: React.FC = () => {
   useEffect(() => window.localStorage.setItem('timeOffRequests', JSON.stringify(timeOffRequests)), [timeOffRequests]);
   useEffect(() => window.localStorage.setItem('targetShifts', JSON.stringify(targetShifts)), [targetShifts]);
   useEffect(() => window.localStorage.setItem('closedShifts', JSON.stringify(closedShifts)), [closedShifts]);
+  useEffect(() => window.localStorage.setItem('extraShifts', JSON.stringify(extraShifts)), [extraShifts]);
+  useEffect(() => window.localStorage.setItem('generationMode', generationMode), [generationMode]);
+  useEffect(() => window.localStorage.setItem('weeksToGenerate', weeksToGenerate.toString()), [weeksToGenerate]);
+  useEffect(() => window.localStorage.setItem('startDate', startDate), [startDate]);
+  useEffect(() => window.localStorage.setItem('dailyOverrides', JSON.stringify(dailyOverrides)), [dailyOverrides]);
+  useEffect(() => window.localStorage.setItem('schedule', JSON.stringify(schedule)), [schedule]);
 
   const getMonday = (d: Date) => {
     const day = d.getDay();
@@ -97,7 +140,8 @@ const App: React.FC = () => {
             closedShifts,
             weeksToGenerate,
             getSpecificDay(),
-            generationMode === 'daily' ? dailyOverrides : []
+            generationMode === 'daily' ? dailyOverrides : [],
+            extraShifts
         );
         setSchedule(generated);
       } catch (err) {
@@ -107,7 +151,7 @@ const App: React.FC = () => {
         setStatusMsg(null);
       }
     }, 50);
-  }, [fixedAssignments, closedShifts, generationMode, weeksToGenerate, dailyOverrides, getSpecificDay]);
+  }, [fixedAssignments, closedShifts, generationMode, weeksToGenerate, dailyOverrides, getSpecificDay, extraShifts]);
 
   const handleCreateEmptySchedule = useCallback(() => {
     setIsLoading(true);
@@ -120,7 +164,8 @@ const App: React.FC = () => {
             closedShifts,
             weeksToGenerate,
             getSpecificDay(),
-            [] // Empty daily overrides
+            [], // Empty daily overrides
+            extraShifts
         );
         setSchedule(generated);
       } catch (err) {
@@ -130,7 +175,7 @@ const App: React.FC = () => {
         setStatusMsg(null);
       }
     }, 50);
-  }, [closedShifts, weeksToGenerate, getSpecificDay]);
+  }, [closedShifts, weeksToGenerate, getSpecificDay, extraShifts]);
 
   const handleGenerateSchedule = useCallback(() => {
     setIsLoading(true);
@@ -149,7 +194,8 @@ const App: React.FC = () => {
             weeksToGenerate,
             getSpecificDay(),
             generationMode === 'daily' ? dailyOverrides : [],
-            effectiveBaseDate
+            effectiveBaseDate,
+            extraShifts
         );
         setSchedule(generatedSchedule);
       } catch (err) {
@@ -159,7 +205,7 @@ const App: React.FC = () => {
         setStatusMsg(null);
       }
     }, 50);
-  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode, weeksToGenerate, dailyOverrides, getSpecificDay, startDate]);
+  }, [bartenders, fixedAssignments, targetShifts, timeOffRequests, closedShifts, generationMode, weeksToGenerate, dailyOverrides, getSpecificDay, startDate, extraShifts]);
   
   const handleAssignBartender = useCallback((
     week: number, day: DayOfWeek, floor: string, bar: string, bartenderName: string | null
@@ -371,15 +417,16 @@ const App: React.FC = () => {
             </div>
 
             {generationMode === 'daily' && getSpecificDay() && (
-                 <DailyOverrideManager dailyOverrides={dailyOverrides} setDailyOverrides={setDailyOverrides} bartenders={bartenders} shifts={SHIFTS_TEMPLATE} specificDay={getSpecificDay()!} />
+                 <DailyOverrideManager dailyOverrides={dailyOverrides} setDailyOverrides={setDailyOverrides} bartenders={bartenders} shifts={combinedShifts} specificDay={getSpecificDay()!} />
             )}
 
             <BartenderManager bartenders={bartenders} setBartenders={setBartenders} />
             <WeeklyAvailabilityManager bartenders={bartenders} setBartenders={setBartenders} />
-            <FixedShiftManager fixedAssignments={fixedAssignments} setFixedAssignments={setFixedAssignments} bartenders={bartenders} shifts={SHIFTS_TEMPLATE} />
+            <FixedShiftManager fixedAssignments={fixedAssignments} setFixedAssignments={setFixedAssignments} bartenders={bartenders} shifts={combinedShifts} />
             <TimeOffRequestManager timeOffRequests={timeOffRequests} setTimeOffRequests={setTimeOffRequests} bartenders={bartenders} />
             <TargetShiftsManager targetShifts={targetShifts} setTargetShifts={setTargetShifts} />
-            <EventShiftManager closedShifts={closedShifts} setClosedShifts={setClosedShifts} shifts={SHIFTS_TEMPLATE} />
+            <EventShiftManager closedShifts={closedShifts} setClosedShifts={setClosedShifts} shifts={combinedShifts} />
+            <ExtraShiftManager extraShifts={extraShifts} setExtraShifts={setExtraShifts} shifts={SHIFTS_TEMPLATE} />
 
             <div className="pt-4 border-t border-slate-700 space-y-3">
               <button

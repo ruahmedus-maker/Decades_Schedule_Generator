@@ -128,12 +128,12 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
   return (
     <div className="space-y-8 select-none">
       {groupedData.map(({ week, grid, days, uniqueKeys, weeklyCounts }) => (
-        <div key={week} className="animate-fadeIn">
+        <div key={week} className="border-b border-slate-800 pb-8 last:border-0">
           <div className="flex items-center gap-3 mb-4 px-1">
              <h3 className="text-xl font-bold text-white bg-indigo-600/20 px-4 py-1 rounded-full border border-indigo-500/30">Week {week}</h3>
              <div className="h-[1px] flex-1 bg-slate-700/50"></div>
           </div>
-          <div className="overflow-x-auto rounded-xl border border-slate-700/50 bg-slate-800/30 shadow-inner max-h-[800px] custom-scrollbar">
+          <div className="overflow-x-auto rounded-xl border border-slate-700/50 bg-slate-800/30 shadow-inner custom-scrollbar">
             <table className="w-full min-w-[900px] text-sm text-left border-separate border-spacing-0">
               <thead className="text-xs text-slate-400 uppercase bg-slate-900 sticky top-0 z-[40]">
                 <tr>
