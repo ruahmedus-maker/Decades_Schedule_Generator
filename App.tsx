@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import type { Schedule, Bartender, Shift, FixedAssignment, TargetShifts, TimeOffRequest, ClosedShift, DayOfWeek, DailyOverride, ScheduleEntry, ExtraShift } from './types';
 import { BARTENDERS as initialBartenders, SHIFTS_TEMPLATE, FIXED_ASSIGNMENTS as initialFixedAssignments, EARNINGS_MAP } from './data';
-import { generateSchedule, generateFixedOnlySchedule } from './services/schedulingAlgorithm';
+import { generateSchedule, generateFixedOnlySchedule, getShiftDate } from './services/schedulingAlgorithm';
 import { exportScheduleToHtml } from './utils/scheduleExporter';
 import ScheduleView from './components/ScheduleView';
 import SummaryView from './components/SummaryView';
@@ -134,6 +134,7 @@ const App: React.FC = () => {
     setStatusMsg('Preparing fixed assignment preview...');
     setTimeout(() => {
       try {
+        const effectiveBaseDate = getEffectiveMondayDate() || startDate;
         const generated = generateFixedOnlySchedule(
             SHIFTS_TEMPLATE,
             fixedAssignments,
@@ -141,7 +142,9 @@ const App: React.FC = () => {
             weeksToGenerate,
             getSpecificDay(),
             generationMode === 'daily' ? dailyOverrides : [],
-            extraShifts
+            extraShifts,
+            timeOffRequests,
+            effectiveBaseDate
         );
         setSchedule(generated);
       } catch (err) {
@@ -151,13 +154,14 @@ const App: React.FC = () => {
         setStatusMsg(null);
       }
     }, 50);
-  }, [fixedAssignments, closedShifts, generationMode, weeksToGenerate, dailyOverrides, getSpecificDay, extraShifts]);
+  }, [fixedAssignments, closedShifts, generationMode, weeksToGenerate, dailyOverrides, getSpecificDay, extraShifts, timeOffRequests, startDate]);
 
   const handleCreateEmptySchedule = useCallback(() => {
     setIsLoading(true);
     setStatusMsg('Creating empty schedule...');
     setTimeout(() => {
       try {
+        const effectiveBaseDate = getEffectiveMondayDate() || startDate;
         const generated = generateFixedOnlySchedule(
             SHIFTS_TEMPLATE,
             [], // Empty fixed assignments
@@ -165,7 +169,9 @@ const App: React.FC = () => {
             weeksToGenerate,
             getSpecificDay(),
             [], // Empty daily overrides
-            extraShifts
+            extraShifts,
+            timeOffRequests,
+            effectiveBaseDate
         );
         setSchedule(generated);
       } catch (err) {
@@ -175,7 +181,7 @@ const App: React.FC = () => {
         setStatusMsg(null);
       }
     }, 50);
-  }, [closedShifts, weeksToGenerate, getSpecificDay, extraShifts]);
+  }, [closedShifts, weeksToGenerate, getSpecificDay, extraShifts, timeOffRequests, startDate]);
 
   const handleGenerateSchedule = useCallback(() => {
     setIsLoading(true);
@@ -215,6 +221,17 @@ const App: React.FC = () => {
     // Normalize strings for safety
     const nFloor = (floor || '').trim();
     const nBar = (bar || '').trim();
+
+    const effectiveBaseDate = getEffectiveMondayDate() || startDate;
+    const shiftDate = getShiftDate(effectiveBaseDate, week, day);
+    
+    const hasConflict = bartenderName ? timeOffRequests.some(req => {
+      if (req.name !== bartenderName) return false;
+      const start = new Date(req.startDate + 'T00:00:00');
+      const end = new Date(req.endDate + 'T00:00:00');
+      const current = new Date(shiftDate + 'T00:00:00');
+      return current >= start && current <= end;
+    }) : false;
 
     // 1. Update Fixed Assignments State
     setFixedAssignments(prev => {
@@ -267,7 +284,7 @@ const App: React.FC = () => {
           if (isAlreadyInScheduleCell) {
              return { ...entry, bartenders: entry.bartenders.filter(b => b.name !== bartenderName) };
           }
-          return { ...entry, bartenders: [...entry.bartenders, { name: bartenderName, role: 'Fixed' }] };
+          return { ...entry, bartenders: [...entry.bartenders, { name: bartenderName, role: 'Fixed', hasConflict }] };
         }
         return entry;
       });
@@ -278,7 +295,7 @@ const App: React.FC = () => {
             day,
             floor: nFloor,
             bar: nBar,
-            bartenders: [{ name: bartenderName, role: 'Fixed' }]
+            bartenders: [{ name: bartenderName, role: 'Fixed', hasConflict }]
         };
         return [...next, newEntry];
       }
@@ -292,6 +309,17 @@ const App: React.FC = () => {
     bartenderName: string
   ) => {
     if (!schedule) return;
+
+    const effectiveBaseDate = getEffectiveMondayDate() || startDate;
+    const toShiftDate = getShiftDate(effectiveBaseDate, to.week, to.day);
+    
+    const hasConflict = timeOffRequests.some(req => {
+      if (req.name !== bartenderName) return false;
+      const start = new Date(req.startDate + 'T00:00:00');
+      const end = new Date(req.endDate + 'T00:00:00');
+      const current = new Date(toShiftDate + 'T00:00:00');
+      return current >= start && current <= end;
+    });
 
     // 1. Update Fixed Assignments
     setFixedAssignments(prev => {
@@ -329,7 +357,7 @@ const App: React.FC = () => {
         if (entry.week === to.week && entry.day === to.day && (entry.floor || '').trim() === (to.floor || '').trim() && (entry.bar || '').trim() === (to.bar || '').trim()) {
           foundTo = true;
           if (entry.bartenders.some(b => b.name === bartenderName)) return entry;
-          return { ...entry, bartenders: [...entry.bartenders, { name: bartenderName, role: 'Fixed' }] };
+          return { ...entry, bartenders: [...entry.bartenders, { name: bartenderName, role: 'Fixed', hasConflict }] };
         }
         return entry;
       });
@@ -340,7 +368,7 @@ const App: React.FC = () => {
               day: to.day,
               floor: (to.floor || '').trim(),
               bar: (to.bar || '').trim(),
-              bartenders: [{ name: bartenderName, role: 'Fixed' }]
+              bartenders: [{ name: bartenderName, role: 'Fixed', hasConflict }]
           });
       }
 
@@ -478,6 +506,7 @@ const App: React.FC = () => {
                     onMoveAssignment={handleMoveAssignment}
                     onAssignBartender={handleAssignBartender}
                     bartenders={bartenders}
+                    timeOffRequests={timeOffRequests}
                   />
                 </>
               ) : (

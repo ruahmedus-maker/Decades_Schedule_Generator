@@ -6,7 +6,7 @@ const DAY_ORDER: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
 /**
  * Calculates a date string for a specific week and day relative to a start date.
  */
-function getShiftDate(baseDateStr: string, week: number, day: DayOfWeek): string {
+export function getShiftDate(baseDateStr: string, week: number, day: DayOfWeek): string {
   if (!baseDateStr) return new Date().toISOString().split('T')[0];
   const date = new Date(baseDateStr + 'T00:00:00');
   const dayIndex = DAY_ORDER.indexOf(day);
@@ -60,10 +60,13 @@ export function generateFixedOnlySchedule(
     weeksToGenerate: number = 5,
     specificDay?: DayOfWeek,
     dailyOverrides: DailyOverride[] = [],
-    extraShifts: ExtraShift[] = []
+    extraShifts: ExtraShift[] = [],
+    timeOffRequests: TimeOffRequest[] = [],
+    calendarStartDate: string = ''
 ): Schedule {
   const schedule: Schedule = [];
   const closedShiftsSet = new Set(closedShifts.map(cs => `${cs.week}-${cs.day}-${(cs.floor || '').trim()}-${(cs.bar || '').trim()}`));
+  const timeOffMap = createTimeOffMap(timeOffRequests);
 
   // 1. Setup blank structure from template
   for (let week = 1; week <= weeksToGenerate; week++) {
@@ -115,7 +118,9 @@ export function generateFixedOnlySchedule(
         (s.bar || '').trim() === (d.bar || '').trim()
       );
       if (shift && !shift.bartenders.some(b => b.name === d.name)) {
-        shift.bartenders.push({ name: d.name, role: 'Fixed' });
+        const shiftDate = getShiftDate(calendarStartDate, 1, d.day);
+        const hasConflict = timeOffMap.has(`${d.name}-${shiftDate}`);
+        shift.bartenders.push({ name: d.name, role: 'Fixed', hasConflict });
       }
     });
   }
@@ -149,7 +154,9 @@ export function generateFixedOnlySchedule(
     }
 
     if (!shift.bartenders.some(b => b.name === fa.name)) {
-      shift.bartenders.push({ name: fa.name, role: 'Fixed' });
+      const shiftDate = getShiftDate(calendarStartDate, weekNum, fa.day);
+      const hasConflict = timeOffMap.has(`${fa.name}-${shiftDate}`);
+      shift.bartenders.push({ name: fa.name, role: 'Fixed', hasConflict });
     }
   });
 
@@ -179,7 +186,7 @@ export function generateSchedule(
     extraShifts: ExtraShift[] = []
 ): Schedule {
   // Use the robust structure builder
-  const schedule = generateFixedOnlySchedule(shiftsTemplate, fixedAssignments, closedShifts, weeksToGenerate, specificDay, dailyOverrides, extraShifts);
+  const schedule = generateFixedOnlySchedule(shiftsTemplate, fixedAssignments, closedShifts, weeksToGenerate, specificDay, dailyOverrides, extraShifts, timeOffRequests, calendarStartDate);
   
   const shiftCounts: Record<string, number> = bartenders.reduce((acc, b) => ({ ...acc, [b.name]: 0 }), {});
   // Pre-fill shift counts from fixed assignments

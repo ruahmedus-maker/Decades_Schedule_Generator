@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import type { Schedule, DayOfWeek, ScheduledBartender, Bartender } from '../types';
+import type { Schedule, DayOfWeek, ScheduledBartender, Bartender, TimeOffRequest } from '../types';
 import { PlusIcon } from './icons/PlusIcon';
 import { TrashIcon } from './icons/TrashIcon';
 
@@ -8,6 +8,7 @@ interface ScheduleViewProps {
   schedule: Schedule;
   startDate?: string;
   bartenders?: Bartender[];
+  timeOffRequests?: TimeOffRequest[];
   onMoveAssignment?: (
     from: { week: number, day: DayOfWeek, floor: string, bar: string },
     to: { week: number, day: DayOfWeek, floor: string, bar: string },
@@ -21,7 +22,7 @@ interface ScheduleViewProps {
 const DAY_ORDER: DayOfWeek[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Sun_Night'];
 const FLOOR_ORDER = ['Rooftop', 'Hip Hop', "2010's", "2000's"];
 
-const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMoveAssignment, onAssignBartender, bartenders = [] }) => {
+const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMoveAssignment, onAssignBartender, bartenders = [], timeOffRequests = [] }) => {
   const [dragOverCell, setDragOverCell] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -191,11 +192,16 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
                                     }} 
                                   >
                                     <div className="flex items-center gap-1.5 relative group/name">
-                                        <span className={`font-semibold text-sm ${b.role === 'Fixed' ? 'text-amber-400' : 'text-slate-200'}`}>
+                                        <span className={`font-semibold text-sm ${b.hasConflict ? 'text-red-500' : b.role === 'Fixed' ? 'text-amber-400' : 'text-slate-200'}`}>
                                             {b.name}
                                         </span>
+                                        {b.hasConflict && (
+                                          <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-red-900 text-red-100 text-[8px] px-1.5 py-0.5 rounded opacity-0 group-hover/name:opacity-100 transition-opacity whitespace-nowrap z-[60] border border-red-700 shadow-lg">
+                                            Time Off Conflict
+                                          </div>
+                                        )}
                                         <span 
-                                            className="text-[10px] bg-slate-900/80 text-indigo-400 font-bold px-1.5 py-0 rounded-full border border-indigo-500/30 shadow-sm" 
+                                            className={`text-[10px] font-bold px-1.5 py-0 rounded-full border shadow-sm ${b.hasConflict ? 'bg-red-900/80 text-red-300 border-red-500/30' : 'bg-slate-900/80 text-indigo-400 border-indigo-500/30'}`} 
                                         >
                                             {weeklyCounts[b.name] || 0}
                                         </span>
@@ -234,15 +240,33 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule, startDate, onMove
                                   <div className="bg-slate-900/10 py-1">
                                     {bartenders.map(b => {
                                       const isCurrentlyAssigned = cellBartenders.some(cb => cb.name === b.name);
+                                      const hasConflictInThisCell = cellBartenders.find(cb => cb.name === b.name)?.hasConflict;
+                                      
+                                      // Check if this bartender has a conflict on this specific day
+                                      let hasPotentialConflict = false;
+                                      if (startDate) {
+                                        const shiftDate = new Date(startDate + 'T00:00:00');
+                                        const dayIndex = DAY_ORDER.indexOf(day as DayOfWeek);
+                                        const offset = dayIndex === 7 ? 6 : dayIndex;
+                                        shiftDate.setDate(shiftDate.getDate() + offset + ((week - 1) * 7));
+                                        const dateStr = shiftDate.toISOString().split('T')[0];
+                                        
+                                        hasPotentialConflict = timeOffRequests.some(req => {
+                                          if (req.name !== b.name) return false;
+                                          return dateStr >= req.startDate && dateStr <= req.endDate;
+                                        });
+                                      }
+
                                       return (
                                         <button 
                                           key={b.name}
                                           onClick={() => handleQuickAssign(week, day as DayOfWeek, floor, bar, b.name)}
-                                          className={`w-full text-left px-4 py-3 text-sm transition-colors flex justify-between items-center ${isCurrentlyAssigned ? 'bg-indigo-900/40 text-indigo-300' : 'text-slate-200 hover:bg-indigo-600'}`}
+                                          className={`w-full text-left px-4 py-3 text-sm transition-colors flex justify-between items-center ${isCurrentlyAssigned ? (hasConflictInThisCell ? 'bg-red-900/40 text-red-300' : 'bg-indigo-900/40 text-indigo-300') : (hasPotentialConflict ? 'hover:bg-red-900/40 text-red-200' : 'text-slate-200 hover:bg-indigo-600')}`}
                                         >
                                           <div className="flex items-center gap-2">
-                                              <span className="font-medium">{b.name}</span>
-                                              {isCurrentlyAssigned && <div className="w-2 h-2 rounded-full bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.5)]"></div>}
+                                              <span className={`font-medium ${!isCurrentlyAssigned && hasPotentialConflict ? 'text-red-400' : ''}`}>{b.name}</span>
+                                              {isCurrentlyAssigned && <div className={`w-2 h-2 rounded-full shadow-[0_0_8px_rgba(129,140,248,0.5)] ${hasConflictInThisCell ? 'bg-red-500' : 'bg-indigo-400'}`}></div>}
+                                              {!isCurrentlyAssigned && hasPotentialConflict && <span className="text-[8px] bg-red-900 text-red-200 px-1 rounded border border-red-700">Conflict</span>}
                                           </div>
                                           <span className="text-[10px] text-slate-500 font-mono bg-slate-900/40 px-1.5 rounded">T{b.tier}</span>
                                         </button>

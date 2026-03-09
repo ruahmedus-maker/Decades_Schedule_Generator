@@ -51,6 +51,7 @@ export interface ExtraShift {
 export interface ScheduledBartender {
   name: string;
   role?: string | null;
+  hasConflict?: boolean;
 }
 
 export interface ScheduleEntry {
